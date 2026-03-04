@@ -23,7 +23,26 @@ import {
     isMcpHttpServerDefinitionDto,
 } from '../../common/lm-protocol';
 import { MAIN_RPC_CONTEXT } from '../../common/plugin-api-rpc';
-import { MCPServerManager, MCPServerDescription, RemoteMCPServerDescription } from '@theia/ai-mcp/lib/common';
+export const MCPServerManager = Symbol('MCPServerManager');
+
+export interface MCPServerDescription {
+    name: string;
+    autostart?: boolean;
+    command?: string;
+    args?: string[];
+    env?: Record<string, string>;
+    resolve?: (serverDescription: MCPServerDescription) => Promise<MCPServerDescription>;
+}
+
+export interface RemoteMCPServerDescription extends MCPServerDescription {
+    serverUrl?: string;
+    headers?: Record<string, string>;
+}
+
+export interface MCPServerManager {
+    addOrUpdateServer(options: MCPServerDescription): void;
+    removeServer(name: string): void;
+}
 import { URI } from '@theia/core';
 
 export class McpServerDefinitionRegistryMainImpl implements McpServerDefinitionRegistryMain {

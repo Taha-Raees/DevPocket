@@ -54,13 +54,13 @@
       "path": "../../packages/search-in-workspace"
     },
     {
-      "path": "../../packages/terminal"
-    },
-    {
       "path": "../../packages/theia-command-console"
     },
     {
       "path": "../../packages/userstorage"
+    },
+    {
+      "path": "../../packages/variable-resolver"
     },
     {
       "path": "../../packages/vsx-registry"
