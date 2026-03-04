@@ -1,0 +1,78 @@
+{
+  "extends": "../../configs/base.tsconfig",
+  "include": [],
+  "compilerOptions": {
+    "composite": true
+  },
+  "references": [
+    {
+      "path": "../../dev-packages/cli"
+    },
+    {
+      "path": "../../dev-packages/native-webpack-plugin"
+    },
+    {
+      "path": "../../packages/core"
+    },
+    {
+      "path": "../../packages/editor"
+    },
+    {
+      "path": "../../packages/filesystem"
+    },
+    {
+      "path": "../../packages/git"
+    },
+    {
+      "path": "../../packages/markers"
+    },
+    {
+      "path": "../../packages/messages"
+    },
+    {
+      "path": "../../packages/mobile-shell"
+    },
+    {
+      "path": "../../packages/monaco"
+    },
+    {
+      "path": "../../packages/navigator"
+    },
+    {
+      "path": "../../packages/outline-view"
+    },
+    {
+      "path": "../../packages/output"
+    },
+    {
+      "path": "../../packages/plugin-ext"
+    },
+    {
+      "path": "../../packages/plugin-ext-vscode"
+    },
+    {
+      "path": "../../packages/preferences"
+    },
+    {
+      "path": "../../packages/process"
+    },
+    {
+      "path": "../../packages/scm"
+    },
+    {
+      "path": "../../packages/search-in-workspace"
+    },
+    {
+      "path": "../../packages/terminal"
+    },
+    {
+      "path": "../../packages/userstorage"
+    },
+    {
+      "path": "../../packages/variable-resolver"
+    },
+    {
+      "path": "../../packages/workspace"
+    }
+  ]
+}

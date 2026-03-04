@@ -1,0 +1,2097 @@
+{
+  "ai-chat-ui.show-settings": "Mostrar ajustes de IA",
+  "ai-chat:summarize-session-as-task-for-coder": "Resumir la sesión como tarea para el codificador",
+  "ai.executePlanWithCoder": "Ejecutar el plan actual con el codificador",
+  "ai.updateTaskContext": "Actualizar el contexto de la tarea actual",
+  "aiConfiguration:open": "Abrir la vista Configuración AI",
+  "aiHistory:clear": "Historia de la IA: Borrar historial",
+  "aiHistory:open": "Abrir la vista Historial de IA",
+  "aiHistory:sortChronologically": "Historia de la IA: Ordenar cronológicamente",
+  "aiHistory:sortReverseChronologically": "Historia de la IA: Ordenar cronológicamente inverso",
+  "aiHistory:toggleCompact": "Historia de la IA: Alternar vista compacta",
+  "aiHistory:toggleHideNewlines": "Historia de AI: Dejar de interpretar las nuevas líneas",
+  "aiHistory:toggleRaw": "Historia de la IA: Alternar vista en bruto",
+  "aiHistory:toggleRenderNewlines": "Historia de AI: Interpretar nuevas líneas",
+  "debug.breakpoint.editCondition": "Editar condición...",
+  "debug.breakpoint.removeSelected": "Eliminar puntos de interrupción seleccionados",
+  "debug.breakpoint.toggleEnabled": "Alternar habilitar puntos de interrupción",
+  "notebook.cell.changeToCode": "Cambiar celda por código",
+  "notebook.cell.changeToMarkdown": "Cambiar Celda a Mardown",
+  "notebook.cell.insertMarkdownCellAbove": "Insertar celda Markdown arriba",
+  "notebook.cell.insertMarkdownCellBelow": "Insertar celda Markdown abajo",
+  "terminal:new:profile": "Crear un nuevo terminal integrado a partir de un perfil",
+  "terminal:profile:default": "Elija el perfil de terminal por defecto",
+  "theia": {
+    "ai": {
+      "agents": {
+        "completionNotification": {
+          "mdDescription": "Comportamiento de la notificación cuando este agente completa una tarea. Si no se establece, se utilizará la configuración de notificación global por defecto.\n                - `os-notification`: Mostrar notificaciones del sistema operativo\n                - `message`: Mostrar notificaciones en la barra de estado/área de mensajes\n                - `blink`: Parpadear o resaltar la interfaz de usuario\n                - `off`: Desactivar las notificaciones para este agente",
+          "title": "Notificación de finalización"
+        },
+        "enable": {
+          "mdDescription": "Especifica si el agente debe estar habilitado (true) o deshabilitado (false).",
+          "title": "Habilitar agente"
+        },
+        "languageModelRequirements": {
+          "identifier": {
+            "mdDescription": "El identificador del modelo lingüístico que se va a utilizar."
+          },
+          "mdDescription": "Especifica los modelos lingüísticos utilizados para este agente.",
+          "purpose": {
+            "mdDescription": "La finalidad para la que se utiliza este modelo lingüístico.",
+            "title": "Propósito"
+          },
+          "title": "Requisitos del modelo lingüístico"
+        },
+        "mdDescription": "Configure los ajustes del agente, como activar o desactivar agentes específicos, configurar avisos y seleccionar LLM.",
+        "selectedVariants": {
+          "mdDescription": "Especifica las variantes de aviso seleccionadas actualmente para este agente.",
+          "title": "Variantes seleccionadas"
+        },
+        "title": "Configuración del agente"
+      },
+      "anthropic": {
+        "apiKey": {
+          "description": "Introduzca la clave API de su cuenta oficial de Anthropic. **Nota:** Al utilizar esta opción, la clave de la API de Anthropic se almacenará en texto claro en la máquina que ejecuta Theia. Utilice la variable de entorno `ANTHROPIC_API_KEY` para establecer la clave de forma segura."
+        },
+        "models": {
+          "description": "Modelos antrópicos oficiales"
+        }
+      },
+      "chat": {
+        "agent": {
+          "architect": "Arquitecto",
+          "coder": "programador",
+          "universal": "Universal"
+        },
+        "applySuggestion": "Solicitar sugerencia",
+        "bypassModelRequirement": {
+          "description": "Omita la comprobación de requisitos del modelo de lenguaje. Active esta opción si utiliza agentes externos (por ejemplo, Claude Code) que no requieren modelos de lenguaje Theia."
+        },
+        "changeSetDefaultTitle": "Cambios propuestos",
+        "changeSetFileDiffUriLabel": "Cambios en la IA: {0}",
+        "chatAgentsVariable": {
+          "description": "Devuelve la lista de agentes de chat disponibles en el sistema"
+        },
+        "chatSessionNamingAgent": {
+          "description": "Agente de generación de nombres de sesión de chat",
+          "vars": {
+            "conversation": {
+              "description": "El contenido de la conversación de chat."
+            },
+            "listOfSessionNames": {
+              "description": "La lista de nombres de sesión existentes."
+            }
+          }
+        },
+        "chatSessionSummaryAgent": {
+          "description": "Agente para generar resúmenes de sesiones de chat."
+        },
+        "confirmApplySuggestion": "El archivo {0} ha cambiado desde que se creó esta sugerencia. Está seguro de que desea aplicar el cambio?",
+        "confirmRevertSuggestion": "El archivo {0} ha cambiado desde que se creó esta sugerencia. Está seguro de que desea revertir el cambio?",
+        "couldNotFindMatchingLM": "No se ha encontrado un modelo de idioma que coincida. Compruebe su configuración.",
+        "couldNotFindReadyLMforAgent": "No se pudo encontrar un modelo de lenguaje listo para el agente {0}. Compruebe su configuración.",
+        "defaultAgent": {
+          "description": "Opcional: <agent-name> del Agente de Chat que se invocará, si no se menciona explícitamente ningún agente con @<agent-name> en la consulta del usuario. Si no se configura ningún Agente predeterminado, se aplicarán los valores predeterminados de Theia."
+        },
+        "imageContextVariable": {
+          "args": {
+            "data": {
+              "description": "Los datos de la imagen en base64."
+            },
+            "mimeType": {
+              "description": "El mimetype de la imagen."
+            },
+            "name": {
+              "description": "El nombre del archivo de imagen, si está disponible."
+            },
+            "wsRelativePath": {
+              "description": "La ruta relativa al espacio de trabajo del archivo de imagen, si está disponible."
+            }
+          },
+          "description": "Proporciona información contextual sobre una imagen",
+          "label": "Archivo de imágenes"
+        },
+        "orchestrator": {
+          "description": "Este agente analiza la solicitud del usuario comparándola con la descripción de todos los agentes de chat disponibles y selecciona al agente más adecuado para responder a la solicitud (mediante IA). La solicitud del usuario se delegará directamente en el agente seleccionado sin más confirmación.",
+          "vars": {
+            "availableChatAgents": {
+              "description": "La lista de agentes de chat en los que el orquestador puede delegar, excluyendo los agentes especificados en la preferencia de lista de exclusión."
+            }
+          }
+        },
+        "pinChatAgent": {
+          "description": "Habilite la vinculación de agentes para mantener activo automáticamente un agente de chat mencionado a lo largo de las solicitudes, reduciendo la necesidad de menciones repetidas."
+        },
+        "revertSuggestion": "Revertir sugerencia",
+        "selectImageFile": "Seleccione un archivo de imagen",
+        "sessionStorage": {
+          "description": "Configure dónde almacenar las sesiones de chat.",
+          "globalPath": "Ruta global",
+          "pathNotUsedForScope": "No se utiliza con un ámbito de almacenamient{0}.",
+          "pathRequired": "La ruta no puede estar vacía.",
+          "pathSettings": "Configuración de ruta",
+          "resetToDefault": "Restablecer valores predeterminados",
+          "scope": {
+            "global": "Almacenar las sesiones de chat en la carpeta de configuración global.",
+            "workspace": "Almacenar las sesiones de chat en la carpeta del espacio de trabajo."
+          },
+          "workspacePath": "Ruta del espacio de trabajo"
+        },
+        "taskContextService": {
+          "summarizeProgressMessage": "Resume: {0}",
+          "updatingProgressMessage": "Actualización: {0}"
+        },
+        "toolConfirmation": {
+          "confirm": {
+            "description": "Pedir confirmación antes de ejecutar las herramientas"
+          },
+          "disabled": {
+            "description": "Desactivar la ejecución de herramientas"
+          },
+          "yolo": {
+            "description": "Ejecutar herramientas automáticamente sin confirmación"
+          }
+        },
+        "view": {
+          "label": "Chat AI"
+        }
+      },
+      "chat-ui": {
+        "addContextVariable": "Añadir variable contextual",
+        "agent": "Agente",
+        "aiDisabled": "Las funciones de IA están desactivadas",
+        "applyAll": "Aplicar todo",
+        "applyAllTitle": "Aplicar todos los cambios pendientes",
+        "askQuestion": "Hacer una pregunta",
+        "attachToContext": "Adjuntar elementos al contexto",
+        "cancel": "Cancelar (Esc)",
+        "chat-view-tree-widget": {
+          "ai": "AI",
+          "aiFeatureHeader": "🚀 ¡Características de IA disponibles (versión alfa)!",
+          "featuresDisabled": "Actualmente, todas las funciones de IA están desactivadas.",
+          "generating": "Generando",
+          "howToEnable": "Cómo activar las funciones de IA:",
+          "noRenderer": "Error: No se ha encontrado ningún renderizador",
+          "scrollToBottom": "Saltar al último mensaje",
+          "waitingForInput": "A la espera de aportaciones",
+          "you": "Usted"
+        },
+        "chatInput": {
+          "clearHistory": "Borrar historial de solicitudes de entrada",
+          "cycleMode": "Ciclo Modo Chat",
+          "nextPrompt": "Siguiente pregunta",
+          "previousPrompt": "Mensaje anterior"
+        },
+        "chatInputAriaLabel": "Escriba su mensaje aquí",
+        "chatResponses": "Respuestas en el chat",
+        "code-part-renderer": {
+          "generatedCode": "Código generado"
+        },
+        "collapseChangeSet": "Colapso del conjunto de cambios",
+        "command-part-renderer": {
+          "commandNotExecutable": "El comando tiene el id \"{0}\" pero no es ejecutable desde la ventana de Chat."
+        },
+        "copyCodeBlock": "Copiar bloque de código",
+        "couldNotSendRequestToSession": "No se ha podido enviar la petición \"{0}\" a la sesión {1}",
+        "delegation-response-renderer": {
+          "prompt": {
+            "label": "Pronta delegación:"
+          },
+          "response": {
+            "label": "Respuesta:"
+          },
+          "starting": "Delegación inicial...",
+          "status": {
+            "canceled": "cancelado",
+            "error": "error",
+            "generating": "generando...",
+            "starting": "empezando..."
+          }
+        },
+        "deleteChangeSet": "Borrar conjunto de cambios",
+        "editRequest": "Editar",
+        "edited": "editado",
+        "editedTooltipHint": "Esta variante de solicitud ha sido editada. Puede restablecerla en la vista Configuración de IA.",
+        "enterChatName": "Introduzca el nombre del chat",
+        "errorChatInvocation": "Se ha producido un error durante la invocación del servicio de chat.",
+        "expandChangeSet": "Expandir conjunto de cambios",
+        "failedToDeleteSession": "Error al eliminar la sesión de chat",
+        "failedToLoadChats": "Error al cargar las sesiones de chat",
+        "failedToRestoreSession": "Error al restaurar la sesión de chat",
+        "failedToRetry": "Fallo al reintentar el mensaje",
+        "focusInput": "Enfoque Chat Entrada",
+        "focusResponse": "Respuesta del chat de enfoque",
+        "noChatAgentsAvailable": "No hay agentes de chat disponibles.",
+        "openDiff": "Dif abierto",
+        "openOriginalFile": "Abrir archivo original",
+        "performThisTask": "Realiza esta tarea.",
+        "persistedSession": "Sesión persistente (haga clic para restaurar)",
+        "removeChat": "Eliminar Chat",
+        "renameChat": "Cambiar el nombre del chat",
+        "requestNotFoundForRetry": "Solicitud no encontrada para reintentar",
+        "responseFrom": "Respuesta de {0}",
+        "selectAgentQuickPickPlaceholder": "Seleccionar un agente para la nueva sesión",
+        "selectChat": "Seleccionar chat",
+        "selectContextVariableQuickPickPlaceholder": "Seleccione una variable contextual que se adjuntará al mensaje",
+        "selectTaskContextQuickPickItem": {
+          "currentlyOpen": "actualmente abierto"
+        },
+        "selectTaskContextQuickPickPlaceholder": "Seleccione un contexto de tarea para adjuntar",
+        "selectVariableArguments": "Seleccionar argumentos variables",
+        "send": "Enviar (Intro)",
+        "sessionNotFoundForRetry": "Sesión no encontrada para reintentar",
+        "text-part-renderer": {
+          "cantDisplay": "¡No se puede mostrar la respuesta, por favor compruebe su ChatResponsePartRenderers!"
+        },
+        "thinking-part-renderer": {
+          "thinking": "Pensar"
+        },
+        "toolcall-part-renderer": {
+          "denied": "Ejecución denegada",
+          "finished": "Ran",
+          "rejected": "Ejecución cancelada"
+        },
+        "toolconfirmation": {
+          "allow-options-dropdown-tooltip": "Más opciones de permisos",
+          "allow-session": "Permitir este Chat",
+          "allowed": "Ejecución de herramientas permitida",
+          "alwaysAllowConfirm": "Entiendo, habilitar la aprobación automática.",
+          "alwaysAllowTitle": "¿Habilitar la aprobación automática para «{0}»?",
+          "canceled": "Ejecución de la herramienta cancelada",
+          "denied": "Ejecución de herramienta denegada",
+          "deny-forever": "Negar siempre",
+          "deny-options-dropdown-tooltip": "Más opciones de denegación",
+          "deny-reason-placeholder": "Introduzca el motivo del rechazo...",
+          "deny-session": "Denegar para este Chat",
+          "deny-with-reason": "Negar con razón...",
+          "executionDenied": "Ejecución de la herramienta denegada",
+          "header": "Confirmar la ejecución de la herramienta"
+        },
+        "unableToSummarizeCurrentSession": "No se puede resumir la sesión actual. Confirme que el agente de resumen no está desactivado.",
+        "unknown-part-renderer": {
+          "contentNotRestoreable": "Este contenido (tipo '{0}') no se ha podido restaurar completamente. Puede ser de una extensión que ya no está disponible."
+        },
+        "unpinAgent": "Desvincular agente",
+        "variantTooltip": "Variante rápida: {0}",
+        "yourMessage": "Tu mensaje"
+      },
+      "claude-code": {
+        "agentDescription": "Agente codificador de Anthropic",
+        "askBeforeEdit": "Pregunta antes de editar",
+        "changeSetTitle": "Cambios por código Claude",
+        "clearCommand": {
+          "description": "Crear una nueva sesión"
+        },
+        "compactCommand": {
+          "description": "Conversación compacta con instrucciones de enfoque opcionales"
+        },
+        "completedCount": "{0}/{1} completado",
+        "configCommand": {
+          "description": "Configuración del Código Claude Abierto"
+        },
+        "currentDirectory": "directorio actual",
+        "differentAgentRequestWarning": "La solicitud de chat anterior fue gestionada por un agente diferente. Claude Code no ve esos otros mensajes.",
+        "directory": "Directorio",
+        "domain": "Dominio",
+        "editAutomatically": "Editar automáticamente",
+        "editNumber": "Editar {0}",
+        "editing": "Edición de",
+        "editsCount": "{0} edita",
+        "emptyTodoList": "No todos available",
+        "entireFile": "Archivo completo",
+        "excludingOnePattern": " (excepto 1 patrón)",
+        "excludingPatterns": " (excluidos los patrones de {0} )",
+        "executedCommand": "Ejecutado: {0}",
+        "failedToParseBashToolData": "Error al analizar los datos de la herramienta Bash",
+        "failedToParseEditToolData": "Error al analizar los datos de la herramienta de edición",
+        "failedToParseGlobToolData": "Error al analizar los datos de la herramienta Glob",
+        "failedToParseGrepToolData": "Error al analizar los datos de la herramienta Grep",
+        "failedToParseLSToolData": "Error al analizar los datos de la herramienta LS",
+        "failedToParseMultiEditToolData": "Error al analizar los datos de la herramienta MultiEdit",
+        "failedToParseReadToolData": "Error al analizar los datos de la herramienta de lectura",
+        "failedToParseTodoListData": "Error al analizar los datos de la lista de tareas",
+        "failedToParseWebFetchToolData": "Error al analizar los datos de la herramienta WebFetch",
+        "failedToParseWriteToolData": "Error al analizar los datos de la herramienta de escritura",
+        "fetching": "Buscar en",
+        "fileFilter": "Filtro de archivos",
+        "filePath": "Ruta del archivo",
+        "fileType": "Tipo de archivo",
+        "findMatchingFiles": "Buscar archivos que coincidan con el patrón glob \"{0}\" en el directorio actual",
+        "findMatchingFilesWithPath": "Buscar archivos que coincidan con el patrón glob \"{0}\" dentro de {1}",
+        "finding": "Encontrar",
+        "from": "En",
+        "globPattern": "patrón global",
+        "grepOptions": {
+          "caseInsensitive": "distingue entre mayúsculas y minúsculas",
+          "glob": "globo: {0}",
+          "headLimit": "límite: {0}",
+          "lineNumbers": "números de línea",
+          "linesAfter": "+{0} después",
+          "linesBefore": "+{0} antes",
+          "linesContext": "±{0} contexto",
+          "multiLine": "multilínea",
+          "type": "tipo: {0}"
+        },
+        "grepOutputModes": {
+          "content": "contenido",
+          "count": "cuente",
+          "filesWithMatches": "archivos con coincidencias"
+        },
+        "ignoredPatterns": "Patrones ignorados",
+        "ignoringPatterns": "Ignorar los patrones de {0} ",
+        "initCommand": {
+          "description": "Inicializar el proyecto con la guía CLAUDE.md"
+        },
+        "itemCount": "{0} artículos",
+        "lineLimit": "Límite de línea",
+        "lines": "Líneas",
+        "listDirectoryContents": "Listar el contenido del directorio",
+        "listing": "Listado",
+        "memoryCommand": {
+          "description": "Editar el archivo de memoria CLAUDE.md"
+        },
+        "multiEditing": "Edición múltiple",
+        "oneEdit": "1 edición",
+        "oneItem": "1 artículo",
+        "oneOption": "1 opción",
+        "openDirectoryTooltip": "Haga clic para abrir el directorio",
+        "openFileTooltip": "Haga clic para abrir el archivo en el editor",
+        "optionsCount": "{0} opciones",
+        "partial": "Parcial",
+        "pattern": "Patrón",
+        "plan": "Modo plan",
+        "project": "proyecto",
+        "projectRoot": "raíz del proyecto",
+        "readMode": "Modo lectura",
+        "reading": "Lectura",
+        "replaceAllCount": "{0} replace-all",
+        "replaceAllOccurrences": "Sustituir todas las apariciones",
+        "resumeCommand": {
+          "description": "Reanudar una sesión"
+        },
+        "reviewCommand": {
+          "description": "Solicitar revisión del código"
+        },
+        "searchPath": "Ruta de búsqueda",
+        "searching": "Buscar en",
+        "startingLine": "Línea de salida",
+        "timeout": "Timeout",
+        "timeoutInMs": "Timeout: {0}ms",
+        "to": "A",
+        "todoList": "Lista de tareas",
+        "todoPriority": {
+          "high": "alta",
+          "low": "bajo",
+          "medium": "medio"
+        },
+        "toolApprovalRequest": "Claude Code quiere utilizar la herramienta \"{0}\". ¿Quiere permitirlo?",
+        "totalEdits": "Total ediciones",
+        "webFetch": "Búsqueda web",
+        "writing": "Escribir"
+      },
+      "code-completion": {
+        "progressText": "Cálculo de la finalización del código AI..."
+      },
+      "codex": {
+        "agentDescription": "Asistente de programación de OpenAI con tecnología Codex",
+        "completedCount": "{0}/{1} completado",
+        "exitCode": "Código de salida: {0}",
+        "fileChangeFailed": "Codex no aplicó los cambios para: {0}",
+        "fileChangeFailedGeneric": "Codex no ha podido aplicar los cambios en el archivo.",
+        "itemCount": "{0} artículos",
+        "noItems": "Sin artículos",
+        "oneItem": "1 artículo",
+        "running": "Corriendo...",
+        "searched": "Buscado",
+        "searching": "Buscando",
+        "todoList": "Lista completa",
+        "webSearch": "Búsqueda web"
+      },
+      "completion": {
+        "agent": {
+          "description": "Este agente proporciona completado de código en línea en el editor de código en el IDE Theia.",
+          "vars": {
+            "file": {
+              "description": "El URI del archivo que se está editando"
+            },
+            "language": {
+              "description": "El languageId del archivo que se está editando"
+            },
+            "prefix": {
+              "description": "El código anterior a la posición actual del cursor"
+            },
+            "suffix": {
+              "description": "El código después de la posición actual del cursor"
+            }
+          }
+        },
+        "automaticEnable": {
+          "description": "Activar automáticamente las finalizaciones de IA en línea dentro de cualquier editor (Mónaco) durante la edición.            \n            Como alternativa, puede activar manualmente el código mediante el comando \"Activar sugerencia en línea\" o el atajo de teclado predeterminado \"Ctrl+Alt+Espacio\"."
+        },
+        "cacheCapacity": {
+          "description": "Número máximo de finalizaciones de código a almacenar en la caché. Un número mayor puede mejorar el rendimiento pero consumirá más memoria.                El valor mínimo es 10, el rango recomendado está entre 50-200.",
+          "title": "Capacidad de la caché de finalización de código"
+        },
+        "debounceDelay": {
+          "description": "Controla el retardo en milisegundos antes de activar la finalización automática después de que se hayan detectado cambios en el editor.                Requiere que esté activada la \"Finalización automática de código\". Introduzca 0 para desactivar el retardo.",
+          "title": "Retardo de rebote"
+        },
+        "excludedFileExts": {
+          "description": "Especifique las extensiones de archivo (por ejemplo, .md, .txt) en las que deben desactivarse las finalizaciones AI.",
+          "title": "Extensiones de archivo excluidas"
+        },
+        "fileVariable": {
+          "description": "El URI del archivo que se está editando. Sólo disponible en el contexto de finalización de código."
+        },
+        "languageVariable": {
+          "description": "El languageId del archivo que se está editando. Sólo disponible en el contexto de finalización de código."
+        },
+        "maxContextLines": {
+          "description": "El número máximo de líneas utilizadas como contexto, distribuidas entre las líneas anteriores y posteriores a la posición del cursor (prefijo y sufijo).            Establézcalo a -1 para utilizar el archivo completo como contexto sin límite de líneas y a 0 para utilizar sólo la línea actual.",
+          "title": "Líneas de contexto máximas"
+        },
+        "prefixVariable": {
+          "description": "El código anterior a la posición actual del cursor. Sólo disponible en el contexto de finalización de código."
+        },
+        "stripBackticks": {
+          "description": "Elimina los signos de cierre del código devuelto por algunos LLM. Si se detecta un punto y aparte, también se eliminará todo el contenido posterior. Este ajuste ayuda a garantizar que se devuelve un código sencillo cuando los modelos de lenguaje utilizan un formato similar al de las marcas.",
+          "title": "Eliminar marcas de finalización en línea"
+        },
+        "suffixVariable": {
+          "description": "El código después de la posición actual del cursor. Sólo disponible en el contexto de finalización de código."
+        }
+      },
+      "configuration": {
+        "selectItem": "Seleccione un elemento."
+      },
+      "copilot": {
+        "auth": {
+          "aiConfiguration": "Configuración de IA",
+          "authorize": "He autorizado",
+          "copied": "¡Copiado!",
+          "copyCode": "Copiar código",
+          "expired": "La autorización ha caducado o ha sido denegada. Inténtalo de nuevo.",
+          "hint": "Después de introducir el código y autorizar, haz clic en «He autorizado» a continuación.",
+          "initiating": "Iniciando autenticación...",
+          "instructions": "Para autorizar a Theia a utilizar GitHub Copilot, visita la siguiente URL e introduce el código:",
+          "openGitHub": "Abrir GitHub",
+          "success": "¡Iniciada sesión correctamente en GitHub Copilot!",
+          "successHint": "Si tu cuenta de GitHub tiene acceso a Copilot, ahora puedes configurar los modelos de lenguaje de Copilot en el ",
+          "title": "Iniciar sesión en GitHub Copilot",
+          "tos": "Al iniciar sesión, aceptas las ",
+          "tosLink": "Condiciones del servicio de GitHub",
+          "verifying": "Verificando autorización..."
+        },
+        "category": "Copiloto",
+        "commands": {
+          "signIn": "Iniciar sesión en GitHub Copilot",
+          "signOut": "Cerrar sesión en GitHub Copilot"
+        },
+        "enterpriseUrl": {
+          "mdDescription": "Dominio de GitHub Enterprise para la API de Copilot (por ejemplo, `github.mycompany.com`). Déjelo vacío para GitHub.com."
+        },
+        "models": {
+          "description": "Modelos de GitHub Copilot que se pueden utilizar. Los modelos disponibles dependen de tu suscripción a Copilot."
+        },
+        "statusBar": {
+          "signedIn": "Iniciado sesión en GitHub Copilot como {0}. Haga clic para cerrar sesión.",
+          "signedOut": "No has iniciado sesión en GitHub Copilot. Haz clic para iniciar sesión."
+        }
+      },
+      "core": {
+        "agentConfiguration": {
+          "actions": "Acciones",
+          "addCustomAgent": "Añadir agente personalizado",
+          "enableAgent": "Habilitar agente",
+          "label": "Agentes",
+          "llmRequirements": "Requisitos para el Máster en Derecho (LLM)",
+          "notUsedInPrompt": "No se utiliza en el aviso",
+          "promptTemplates": "Plantillas",
+          "selectAgentMessage": "Seleccione primero un agente",
+          "templateName": "Plantilla",
+          "undeclared": "Sin declarar",
+          "usedAgentSpecificVariables": "Variables específicas del agente utilizadas",
+          "usedFunctions": "Funciones utilizadas",
+          "usedGlobalVariables": "Variables globales utilizadas",
+          "variant": "Variant"
+        },
+        "agentsVariable": {
+          "description": "Devuelve la lista de agentes disponibles en el sistema"
+        },
+        "aiConfiguration": {
+          "label": "✨ Configuración AI [Alfa]"
+        },
+        "blinkTitle": {
+          "agentCompleted": "Theia - Agente finalizado",
+          "namedAgentCompleted": "Theia - Agente \"{0}\" Finalizado"
+        },
+        "changeSetSummaryVariable": {
+          "description": "Proporciona un resumen de los archivos de un conjunto de cambios y su contenido."
+        },
+        "contextDetailsVariable": {
+          "description": "Proporciona valores de texto completo y descripciones para todos los elementos de contexto."
+        },
+        "contextSummaryVariable": {
+          "description": "Describe los archivos en el contexto de una sesión determinada."
+        },
+        "customAgentTemplate": {
+          "description": "Este es un ejemplo de agente. Adapte las propiedades a sus necesidades."
+        },
+        "defaultModelAliases": {
+          "code": {
+            "description": "Optimizado para tareas de comprensión y generación de código."
+          },
+          "code-completion": {
+            "description": "Más adecuado para situaciones de autocompletado de código."
+          },
+          "summarize": {
+            "description": "Modelos priorizados para resumir y condensar el contenido."
+          },
+          "universal": {
+            "description": "Bien equilibrado tanto para el código como para el uso general del lenguaje."
+          }
+        },
+        "defaultNotification": {
+          "mdDescription": "El método de notificación por defecto utilizado cuando un agente de IA completa una tarea. Los agentes individuales pueden anular esta configuración.\n                - `os-notification`: Mostrar notificaciones del sistema operativo\n                - Mensaje Mostrar notificaciones en la barra de estado/área de mensajes.\n                - `blink`: Parpadear o resaltar la interfaz de usuario\n                - `off`: Desactivar todas las notificaciones",
+          "title": "Tipo de notificación por defecto"
+        },
+        "discard": {
+          "label": "Descartar Plantilla AI Prompt"
+        },
+        "discardCustomPrompt": {
+          "tooltip": "Descartar personalizaciones"
+        },
+        "fileVariable": {
+          "description": "Resuelve el contenido de un fichero",
+          "uri": {
+            "description": "El URI del archivo solicitado."
+          }
+        },
+        "languageModelRenderer": {
+          "alias": "[alias] {0}",
+          "languageModel": "Modelo lingüístico",
+          "purpose": "Propósito"
+        },
+        "maxRetries": {
+          "mdDescription": "El número máximo de reintentos cuando falla una petición a un proveedor de AI. Un valor de 0 significa que no hay reintentos.",
+          "title": "Reintentos máximos"
+        },
+        "modelAliasesConfiguration": {
+          "agents": "Agentes que utilizan este alias",
+          "defaultList": "[Lista por defecto]",
+          "evaluatesTo": "Evalúa a",
+          "label": "Model Aliases",
+          "modelNotReadyTooltip": "No está listo",
+          "modelReadyTooltip": "Listo",
+          "noAgents": "Ningún agente utiliza este alias.",
+          "noModelReadyTooltip": "No model ready",
+          "noResolvedModel": "No hay ningún modelo listo para este alias.",
+          "priorityList": "Lista de prioridades",
+          "selectAlias": "Seleccione un alias de modelo.",
+          "selectedModelId": "Modelo seleccionado",
+          "unavailableModel": "El modelo seleccionado ya no está disponible"
+        },
+        "noVariableFoundForOpenRequest": "No se ha encontrado ninguna variable para la solicitud abierta.",
+        "openEditorsShortVariable": {
+          "description": "Referencia breve a todos los archivos abiertos actualmente (rutas relativas, separadas por comas)"
+        },
+        "openEditorsVariable": {
+          "description": "Una lista separada por comas de todos los archivos abiertos actualmente, relativos a la raíz del espacio de trabajo."
+        },
+        "preference": {
+          "languageModelAliases": {
+            "description": "Configure los modelos para cada alias de modelo de idioma en la [Vista de configuración de AI]({0}). Alternativamente, puede establecer la configuración manualmente en el settings.json: \n```\n\"default/code\": {\n  \"selectedModel\": \"anthropic/claude-opus-4-20250514\"\n}\n```",
+            "selectedModel": "El modelo seleccionado por el usuario para este alias.",
+            "title": "Alias de modelos lingüísticos"
+          }
+        },
+        "prefs": {
+          "title": "✨ Características de la IA [Alfa]"
+        },
+        "promptFragmentsConfiguration": {
+          "activeCustomizationTitle": "Personalización activa",
+          "createCustomizationTitle": "Crear personalización",
+          "customization": "personalización",
+          "customizationLabel": "Personalización",
+          "defaultVariantTitle": "Variante por defecto",
+          "deleteCustomizationTitle": "Borrar personalización",
+          "editTemplateTitle": "Editar plantilla",
+          "headerTitle": "Fragmentos de Prompt",
+          "label": "Fragmentos de Prompt",
+          "noFragmentsAvailable": "No hay fragmentos disponibles.",
+          "otherPromptFragmentsHeader": "Otros fragmentos de Prompt",
+          "promptTemplateText": "Texto de la plantilla",
+          "promptVariantsHeader": "Conjuntos de variantes",
+          "removeCustomizationDialogMsg": "¿Está seguro de que desea eliminar la personalización {0} para el fragmento de aviso \"{1}\"?",
+          "removeCustomizationDialogTitle": "Eliminar personalización",
+          "removeCustomizationWithDescDialogMsg": "¿Está seguro de que desea eliminar la personalización {0} para el fragmento de aviso \"{1}\" ({2})?",
+          "resetAllButton": "Restablecer todo",
+          "resetAllCustomizationsDialogMsg": "¿Está seguro de que desea restablecer todos los fragmentos de aviso a sus versiones incorporadas? Esto eliminará todas las personalizaciones.",
+          "resetAllCustomizationsDialogTitle": "Restablecer todas las personalizaciones",
+          "resetAllCustomizationsTitle": "Restablecer todas las personalizaciones",
+          "resetAllPromptFragments": "Restablecer todos los fragmentos de aviso",
+          "resetToBuiltInDialogMsg": "¿Está seguro de que desea restablecer el fragmento de aviso \"{0}\" a su versión incorporada? Esto eliminará todas las personalizaciones.",
+          "resetToBuiltInDialogTitle": "Restablecer a incorporado",
+          "resetToBuiltInTitle": "Restablecer a este built-in",
+          "resetToCustomizationDialogMsg": "¿Está seguro de que desea restablecer el fragmento de aviso \"{0}\" para utilizar la personalización {1}? Esto eliminará todas las personalizaciones de mayor prioridad.",
+          "resetToCustomizationDialogTitle": "Volver a Personalización",
+          "resetToCustomizationTitle": "Volver a esta personalización",
+          "selectedVariantLabel": "Selección",
+          "selectedVariantTitle": "Variante seleccionada",
+          "usedByAgentTitle": "Utilizado por el agente: {0}",
+          "variantSetError": "La variante seleccionada no existe y no se ha podido encontrar ninguna por defecto. Por favor, compruebe su configuración.",
+          "variantSetWarning": "La variante seleccionada no existe. En su lugar se está utilizando la variante por defecto.",
+          "variantsOfSystemPrompt": "Variantes de este conjunto de variantes:"
+        },
+        "promptTemplates": {
+          "description": "Carpeta para almacenar plantillas de avisos personalizadas. Si no se personalizan, se utiliza el directorio de configuración del usuario. Por favor, considere el uso de una carpeta, que está bajo control de versiones para gestionar sus variantes de plantillas de aviso.",
+          "openLabel": "Seleccionar carpeta"
+        },
+        "promptVariable": {
+          "argDescription": "El identificador de la plantilla que debe resolverse",
+          "completions": {
+            "detail": {
+              "builtin": "Fragmento de aviso integrado",
+              "custom": "Fragmento de aviso personalizado"
+            }
+          },
+          "description": "Resuelve las plantillas de avisos a través del servicio de avisos"
+        },
+        "prompts": {
+          "category": "Plantillas Theia AI Prompt"
+        },
+        "requestSettings": {
+          "clientSettings": {
+            "description": "Configuración del cliente para gestionar los mensajes que se envían de vuelta al llm.",
+            "keepThinking": {
+              "description": "Si se establece en false, toda la salida de pensamiento se filtrará antes de enviar la siguiente solicitud de usuario en una conversación multigiro."
+            },
+            "keepToolCalls": {
+              "description": "Si se establece en false, todas las solicitudes y respuestas de herramientas se filtrarán antes de enviar la siguiente solicitud de usuario en una conversación multivuelta."
+            }
+          },
+          "mdDescription": "Permite especificar configuraciones de solicitud personalizadas para múltiples modelos.\n            Cada objeto representa la configuración para un modelo específico. El campo `modelId` especifica el ID del modelo, `requestSettings` define la configuración específica del modelo.\n            El campo `providerId` es opcional y permite aplicar la configuración a un proveedor específico. Si no se define, la configuración se aplicará a todos los proveedores.\n            Ejemplo de providerIds: huggingface, openai, ollama, llamafile.\n            Consulte [nuestra documentación](https://theia-ide.org/docs/user_ai/#custom-request-settings) para obtener más información.",
+          "modelSpecificSettings": {
+            "description": "Ajustes para el ID de modelo específico."
+          },
+          "scope": {
+            "agentId": {
+              "description": "El id de agente (opcional) al que aplicar la configuración."
+            },
+            "modelId": {
+              "description": "El identificador del modelo (opcional)"
+            },
+            "providerId": {
+              "description": "El identificador (opcional) del proveedor al que se aplicarán los ajustes."
+            }
+          },
+          "title": "Configuración personalizada de solicitudes"
+        },
+        "skillsVariable": {
+          "description": "Devuelve la lista de habilidades disponibles que pueden utilizar los agentes de IA."
+        },
+        "taskContextSummary": {
+          "description": "Resuelve todos los elementos de contexto de tarea presentes en el contexto de sesión."
+        },
+        "templateSettings": {
+          "edited": "editado",
+          "unavailableVariant": "La variante seleccionada ya no está disponible"
+        },
+        "todayVariable": {
+          "description": "Hace algo para hoy",
+          "format": {
+            "description": "El formato de la fecha"
+          }
+        },
+        "unableToDisplayVariableValue": "No se puede mostrar el valor de la variable.",
+        "unableToResolveVariable": "No se puede resolver la variable.",
+        "variable-contribution": {
+          "builtInVariable": "Theia Variable incorporada",
+          "currentAbsoluteFilePath": "La ruta absoluta del archivo abierto actualmente. Tenga en cuenta que la mayoría de los agentes esperan una ruta de archivo relativa (relativa al espacio de trabajo actual).",
+          "currentFileContent": "El contenido plano del archivo abierto actualmente. Esto excluye la información de dónde proviene el contenido. Tenga en cuenta que la mayoría de los agentes funcionarán mejor con una ruta de archivo relativa (relativa al espacio de trabajo actual).",
+          "currentRelativeDirPath": "La ruta relativa del directorio que contiene el archivo abierto actualmente.",
+          "currentRelativeFilePath": "La ruta relativa del archivo abierto actualmente.",
+          "currentSelectedText": "El texto sin formato seleccionado actualmente en el archivo abierto. Esto excluye la información de donde viene el contenido. Tenga en cuenta que la mayoría de los agentes funcionarán mejor con una ruta de archivo relativa (relativa al espacio de trabajo actual).",
+          "dotRelativePath": "Referencia corta a la ruta relativa del archivo abierto actualmente ('currentRelativeFilePath')."
+        }
+      },
+      "editor": {
+        "editorContextVariable": {
+          "description": "Resuelve la información de contexto específica del editor",
+          "label": "EditorContext"
+        },
+        "explainWithAI": {
+          "prompt": "Explique este error",
+          "title": "Explicar con IA"
+        },
+        "fixWithAI": {
+          "prompt": "Ayuda para solucionar este error"
+        }
+      },
+      "google": {
+        "apiKey": {
+          "description": "Introduzca una clave API de su cuenta oficial de Google AI (Gemini). **Tenga en cuenta:** Al utilizar esta preferencia, la clave API de GOOGLE AI se almacenará en texto claro en la máquina que ejecuta Theia. Utiliza la variable de entorno `GOOGLE_API_KEY` para establecer la clave de forma segura."
+        },
+        "maxRetriesOnErrors": {
+          "description": "Número máximo de reintentos en caso de error. Si es menor que 1, la lógica de reintentos está desactivada."
+        },
+        "models": {
+          "description": "Modelos oficiales de Google Gemini"
+        },
+        "retryDelayOnOtherErrors": {
+          "description": "Retraso en segundos entre reintentos en caso de otros errores (en ocasiones la GenAI de Google informa de errores como sintaxis JSON incompleta devuelta desde el modelo o 500 Internal Server Error). Establecerlo a -1 previene reintentos en estos casos. De lo contrario, el reintento se produce inmediatamente (si se establece en 0) o después de este retraso en segundos (si se establece en un número positivo)."
+        },
+        "retryDelayOnRateLimitError": {
+          "description": "Retraso en segundos entre reintentos en caso de errores de límite de velocidad. Véase https://ai.google.dev/gemini-api/docs/rate-limits"
+        }
+      },
+      "history": {
+        "clear": {
+          "tooltip": "Borrar el historial de todos los agentes"
+        },
+        "exchange-card": {
+          "agentId": "Agente",
+          "timestamp": "Comenzó"
+        },
+        "open-history-tooltip": "Abrir la historia de la IA...",
+        "request-card": {
+          "agent": "Agente",
+          "model": "Modelo",
+          "request": "Solicitar",
+          "response": "Respuesta",
+          "timestamp": "Marca de tiempo",
+          "title": "Solicitar"
+        },
+        "sortChronologically": {
+          "tooltip": "Ordenar cronológicamente"
+        },
+        "sortReverseChronologically": {
+          "tooltip": "Ordenar cronológicamente inverso"
+        },
+        "toggleCompact": {
+          "tooltip": "Mostrar vista compacta"
+        },
+        "toggleHideNewlines": {
+          "tooltip": "Dejar de interpretar las nuevas líneas"
+        },
+        "toggleRaw": {
+          "tooltip": "Mostrar vista en bruto"
+        },
+        "toggleRenderNewlines": {
+          "tooltip": "Interpretar las nuevas líneas"
+        },
+        "view": {
+          "label": "✨ Historia del agente de IA [Alfa]",
+          "noAgent": "No hay agente disponible.",
+          "noAgentSelected": "No hay agente seleccionado.",
+          "noHistoryForAgent": "No hay historial disponible para el agente seleccionado '{0}'"
+        }
+      },
+      "huggingFace": {
+        "apiKey": {
+          "mdDescription": "Introduzca una clave API para su cuenta de Hugging Face. **Tenga en cuenta:** Al utilizar esta preferencia, la clave API de Hugging Face se almacenará en texto claro en la máquina que ejecuta Theia. Utilice la variable de entorno `HUGGINGFACE_API_KEY` para establecer la clave de forma segura."
+        },
+        "models": {
+          "mdDescription": "Modelos de Hugging Face que se pueden utilizar. **Nota:** Actualmente solo se admiten los modelos que admiten la API de finalización de chat (modelos ajustados a instrucciones como «*-Instruct»). Algunos modelos pueden requerir la aceptación de los términos de la licencia en el sitio web de Hugging Face."
+        }
+      },
+      "ide": {
+        "agent-description": "Configure los ajustes del agente de IA, incluida la habilitación, la selección de LLM, la personalización de la plantilla de avisos y la creación de agentes personalizados en la [Vista de configuración de IA]({0}).",
+        "agentConfiguration": {
+          "customAgentLocationQuickPick": {
+            "createNewFile": "Crear un nuevo archivo",
+            "openExistingFile": "Abrir el archivo existente",
+            "placeholder": "Elija dónde crear o abrir un archivo de agentes personalizados",
+            "title": "Seleccione la ubicación del archivo de agentes personalizados"
+          },
+          "noDescription": "No hay descripción disponible."
+        },
+        "app-tester": {
+          "errorCheckingDevToolsServerStatus": "Error al comprobar el estado del servidor DevTools MCP: {0}",
+          "errorCheckingPlaywrightServerStatus": "Error al comprobar el estado del servidor MCP de Playwright: {0}",
+          "startChromeDevToolsMcpServers": {
+            "canceled": "Configure el servidor MCP de Chrome DevTools.",
+            "error": "No se pudo iniciar el servidor MCP de Chrome DevTools: {0}",
+            "progress": "Iniciando el servidor MCP de Chrome DevTools.",
+            "question": "El servidor MCP de Chrome DevTools no se está ejecutando. ¿Desea iniciarlo ahora? Esto puede instalar el servidor MCP de Chrome DevTools."
+          },
+          "startMcpServers": {
+            "no": "No, cancelar",
+            "yes": "Sí, inicia los servidores."
+          },
+          "startPlaywrightServers": {
+            "canceled": "Configure los servidores MCP.",
+            "error": "Error al iniciar el servidor MCP de Playwright: {0}",
+            "progress": "Inicio de los servidores MCP de Playwright.",
+            "question": "Los servidores MCP de Playwright no se están ejecutando. ¿Desea iniciarlos ahora? Esto puede instalar los servidores MCP de Playwright."
+          }
+        },
+        "architectAgent": {
+          "mode": {
+            "default": "Modo predeterminado",
+            "plan": "Plan Modo",
+            "simple": "Modo simple"
+          },
+          "suggestion": {
+            "executePlanWithCoder": "Ejecuta «{0}» con Coder.",
+            "summarizeSessionAsTaskForCoder": "Resumir esta sesión como tarea para Coder",
+            "updateTaskContext": "Actualizar el contexto de la tarea actual"
+          }
+        },
+        "bypassHint": "Algunos agentes como Claude Code no requieren los modelos lingüísticos de Theia.",
+        "chatDisabledMessage": {
+          "featuresTitle": "Vistas y funciones compatibles actualmente:"
+        },
+        "coderAgent": {
+          "mode": {
+            "agentNext": "Modo agente (Siguiente)",
+            "edit": "Modo de edición"
+          },
+          "suggestion": {
+            "fixProblems": {
+              "content": "[Solucionar problemas]({0}) en el archivo actual.",
+              "prompt": "por favor mire {1} y solucione cualquier problema."
+            },
+            "startNewChat": "Mantén los chats breves y centrados. [Inicia un nuevo chat]({0}) para una nueva tarea o [inicia un nuevo chat con un resumen de este]({1})."
+          }
+        },
+        "commandAgent": {
+          "commandCallback": {
+            "confirmAction": "Entendido.",
+            "label": "Mando de IA"
+          },
+          "response": {
+            "customHandler": "Intenta ejecutar esto:",
+            "noCommand": "Lo siento, no puedo encontrar tal comando",
+            "theiaCommand": "He encontrado este comando que puede ayudarte:"
+          },
+          "vars": {
+            "commandIds": {
+              "description": "La lista de comandos disponibles en Theia."
+            }
+          }
+        },
+        "configureAgent": {
+          "header": "Configurar un agente predeterminado"
+        },
+        "continueAnyway": "Continuar de todos modos",
+        "createSkillAgent": {
+          "mode": {
+            "edit": "Modo predeterminado"
+          }
+        },
+        "enableAI": {
+          "mdDescription": "❗ Este ajuste te permite acceder a las últimas capacidades de IA (versión Beta).            \n            Tenga en cuenta que estas funciones se encuentran en fase beta, lo que significa que pueden sufrir cambios y que se seguirán mejorando. Es importante ser consciente de que estas funciones pueden generar solicitudes continuas a los modelos lingüísticos (LLM) a los que usted proporciona acceso. Esto podría generar costes que deberá supervisar de cerca. Al activar esta opción, usted acepta estos riesgos.            \n            **Nota Los ajustes de esta sección sólo surtirán efecto\n            una vez activada la configuración de la función principal. Una vez activada la función, deberá configurar al menos un proveedor LLM de los que se indican a continuación. Consulte también [la documentación](https://theia-ide.org/docs/user_ai/)**."
+        },
+        "github": {
+          "configureGitHubServer": {
+            "canceled": "Se ha cancelado la configuración del servidor de GitHub. Por favor, configura el servidor MCP de GitHub para utilizar este agente.",
+            "no": "No, cancelar",
+            "yes": "Sí, configurar servidor GitHub"
+          },
+          "errorCheckingGitHubServerStatus": "Error al comprobar el estado del servidor MCP de GitHub: {0}",
+          "startGitHubServer": {
+            "canceled": "Inicia el servidor MCP de GitHub para utilizar este agente.",
+            "error": "Error al iniciar el servidor MCP de GitHub: {0}",
+            "no": "No, cancelar",
+            "progress": "Iniciando el servidor MCP de GitHub.",
+            "question": "El servidor MCP de GitHub está configurado pero no se está ejecutando. ¿Desea iniciarlo ahora?",
+            "yes": "Sí, inicie el servidor"
+          }
+        },
+        "githubRepoName": {
+          "description": "El nombre del repositorio GitHub actual (por ejemplo, \"eclipse-theia/theia\")"
+        },
+        "model-selection-description": "Elija qué Modelos de Lenguaje Grande (LLMs) utiliza cada agente de IA en la [Vista de Configuración de IA]({0}).",
+        "moreAgentsAvailable": {
+          "header": "Hay más agentes disponibles."
+        },
+        "noRecommendedAgents": "No hay agentes recomendados disponibles.",
+        "openSettings": "Abrir configuración de IA",
+        "or": "o",
+        "orchestrator": {
+          "error": {
+            "noAgents": "No hay ningún agente de chat disponible para atender la solicitud. Compruebe en la configuración si hay alguno habilitado."
+          },
+          "progressMessage": "Determinar el agente más adecuado",
+          "response": {
+            "delegatingToAgent": "Delegar en `@{0}`"
+          }
+        },
+        "prompt-template-description": "Seleccione las variantes de aviso y personalice las plantillas de aviso para los agentes AI en la [Vista de configuración AI]({0}).",
+        "recommendedAgents": "Agentes recomendados:",
+        "skillsConfiguration": {
+          "label": "Habilidades",
+          "location": {
+            "label": "Ubicación"
+          }
+        },
+        "toolsConfiguration": {
+          "confirmAlwaysAllow": {
+            "confirm": "Entiendo, habilitar la aprobación automática.",
+            "title": "¿Habilitar la aprobación automática para «{0}»?"
+          },
+          "confirmationMode": {
+            "label": "Modo de confirmación"
+          },
+          "default": {
+            "label": "Modo de confirmación de herramienta por defecto:"
+          },
+          "resetAll": "Restablecer todo",
+          "resetAllConfirmDialog": {
+            "msg": "¿Estás seguro de que quieres restablecer todos los modos de confirmación de herramientas a los predeterminados? Esto eliminará todos los ajustes personalizados.",
+            "title": "Restablecer todos los modos de confirmación de herramientas"
+          },
+          "resetAllTooltip": "Restablecer todas las herramientas por defecto",
+          "toolOptions": {
+            "confirm": {
+              "label": "Confirme"
+            }
+          }
+        },
+        "variableConfiguration": {
+          "selectVariable": "Seleccione una variable.",
+          "usedByAgents": "Utilizado por agentes",
+          "variableArgs": "Argumentos variables"
+        }
+      },
+      "llamaFile": {
+        "prefs": {
+          "mdDescription": "Este ajuste le permite configurar y gestionar modelos LlamaFile en Theia IDE.            \n            Cada entrada requiere un `nombre` fácil de usar, el archivo `uri` que apunta a su LlamaFile, y el `puerto` en el que se ejecutará.            \n            Para iniciar un LlamaFile, utilice el comando \"Start LlamaFile\", que le permite seleccionar el modelo deseado.            \n            Si edita una entrada (por ejemplo, cambiando el puerto), cualquier instancia en ejecución se detendrá y tendrá que iniciarla manualmente de nuevo.            \n            [Más información sobre la configuración y gestión de LlamaFiles en la documentación de Theia IDE](https://theia-ide.org/docs/user_ai/#llamafile-models).",
+          "name": {
+            "description": "El nombre del modelo a utilizar para este Llamafile."
+          },
+          "port": {
+            "description": "El puerto a utilizar para iniciar el servidor."
+          },
+          "title": "✨ AI LlamaFile",
+          "uri": {
+            "description": "La uri del archivo Llamafile."
+          }
+        },
+        "start": "Iniciar Llamafile",
+        "stop": "Stop Llamafile"
+      },
+      "llamafile": {
+        "error": {
+          "noConfigured": "No Llamafiles configured.",
+          "noRunning": "No hay Llamafiles funcionando.",
+          "startFailed": "Algo ha ido mal durante el inicio de llamafile: {0}.\nPara más información, consulte la consola.",
+          "stopFailed": "Algo ha ido mal durante la parada de llamafile: {0}.\nPara más información, consulte la consola."
+        }
+      },
+      "mcp": {
+        "error": {
+          "allServersRunning": "Todos los servidores MCP ya están en funcionamiento.",
+          "noRunningServers": "No hay servidores MCP en funcionamiento.",
+          "noServersConfigured": "No hay servidores MCP configurados.",
+          "startFailed": "Se ha producido un error al iniciar el servidor MCP."
+        },
+        "info": {
+          "serverStarted": "Servidor MCP \"{0}\" iniciado con éxito. Herramientas registradas: {1}"
+        },
+        "servers": {
+          "args": {
+            "mdDescription": "Una matriz de argumentos para pasar al comando.",
+            "title": "Argumentos para el comando"
+          },
+          "autostart": {
+            "mdDescription": "Iniciar automáticamente este servidor cuando se inicie el frontend. Los servidores recién añadidos no se inician automáticamente de forma inmediata, sino cuando se reinician.",
+            "title": "Arranque automático"
+          },
+          "command": {
+            "mdDescription": "El comando utilizado para iniciar el servidor MCP, por ejemplo, \"uvx\" o \"npx\".",
+            "title": "Comando para ejecutar el servidor MCP"
+          },
+          "env": {
+            "mdDescription": "Variables de entorno opcionales para el servidor, como una clave API.",
+            "title": "Variables de entorno"
+          },
+          "headers": {
+            "mdDescription": "Cabeceras adicionales opcionales incluidas en cada solicitud al servidor.",
+            "title": "Cabeceras"
+          },
+          "mdDescription": "Configura servidores MCP con comandos, argumentos, opcionalmente variables de entorno y autoarranque (true por defecto). Cada servidor se identifica mediante una clave única, como \"brave-search\" o \"filesystem\". Para iniciar un servidor, utilice el comando \"MCP: Iniciar servidor MCP\", que permite seleccionar el servidor deseado. Para detener un servidor, utilice el comando \"MCP: Detener servidor MCP\". Tenga en cuenta que el arranque automático sólo surtirá efecto tras un reinicio, por lo que deberá arrancar un servidor manualmente por primera vez.\nEjemplo de configuración:\n```{\n  \"brave-search\": {\n    \"comando\": \"npx\",\n    \"args\": [\n      \"-y\",\n      \"@modelcontextprotocol/server-brave-search\"\n    ],\n    \"env\": {\n      \"BRAVE_API_KEY\": \"YOUR_API_KEY\"\n    },\n  },\n  \"filesystem\": {\n    \"command\": \"npx\",\n    \"args\": [\"-y\", \"@modelcontextprotocol/server-filesystem\", \"/Users/YOUR_USERNAME/Desktop\"],\n    \"env\": {\n      \"CUSTOM_ENV_VAR\": \"custom-value\"\n    },\n    \"autostart\": false\n  }\n}\n```",
+          "serverAuthToken": {
+            "mdDescription": "El token de autenticación para el servidor, si es necesario. Se utiliza para autenticarse con el servidor remoto.",
+            "title": "Token de autenticación"
+          },
+          "serverAuthTokenHeader": {
+            "mdDescription": "El nombre de la cabecera que se utilizará para el token de autenticación del servidor. Si no se proporciona, se utilizará \"Authorization\" con \"Bearer\".",
+            "title": "Nombre del encabezado de autenticación"
+          },
+          "serverUrl": {
+            "mdDescription": "La URL del servidor MCP remoto. Si se proporciona, el servidor se conectará a esta URL en lugar de iniciar un proceso local.",
+            "title": "URL del servidor"
+          },
+          "title": "Configuración de servidores MCP"
+        },
+        "start": {
+          "label": "MCP: Iniciar servidor MCP"
+        },
+        "stop": {
+          "label": "MCP: Detener el servidor MCP"
+        }
+      },
+      "mcpConfiguration": {
+        "arguments": "Argumentos: ",
+        "autostart": "Arranque automático: ",
+        "connectServer": "Conectar",
+        "connectingServer": "Conectando...",
+        "copiedAllList": "Copiar todas las herramientas al portapapeles (lista de todas las herramientas)",
+        "copiedAllSingle": "Copiado de todas las herramientas al portapapeles (un único fragmento de prompt con todas las herramientas)",
+        "copiedForPromptTemplate": "Copiado de todas las herramientas en el portapapeles para la plantilla de aviso (un único fragmento de aviso con todas las herramientas).",
+        "copyAllList": "Copiar todo (lista de todas las herramientas)",
+        "copyAllSingle": "Copiar todo para el chat (fragmento de aviso único con todas las herramientas)",
+        "copyForPrompt": "Herramienta de copia (para chat o plantilla de aviso)",
+        "copyForPromptTemplate": "Copiar todo para plantilla de aviso (fragmento de aviso único con todas las herramientas)",
+        "environmentVariables": "Variables de entorno: ",
+        "headers": "Cabeceras: ",
+        "noServers": "No hay servidores MCP configurados",
+        "serverAuthToken": "Token de autenticación: ",
+        "serverAuthTokenHeader": "Nombre del encabezado de autenticación: ",
+        "serverUrl": "URL del servidor: ",
+        "tools": "Herramientas: "
+      },
+      "openai": {
+        "apiKey": {
+          "mdDescription": "Introduzca una clave API de su cuenta oficial OpenAI. **Tenga en cuenta:** Al utilizar esta preferencia, la clave API de Open AI se almacenará en texto claro en la máquina que ejecuta Theia. Utilice la variable de entorno `OPENAI_API_KEY` para establecer la clave de forma segura."
+        },
+        "customEndpoints": {
+          "apiKey": {
+            "title": "La clave para acceder a la API servida en la url dada o `true` para usar la clave global de la API de OpenAI."
+          },
+          "apiVersion": {
+            "title": "La versión para acceder a la API servida en la url dada en Azure o `true` para usar la versión global de la API OpenAI."
+          },
+          "deployment": {
+            "title": "El nombre de despliegue para acceder a la API servida en la url dada en Azure."
+          },
+          "developerMessageSettings": {
+            "title": "Controla el manejo de los mensajes del sistema: `user`, `system`, y `developer` serán usados como rol, `mergeWithFollowingUserMessage` prefijará el siguiente mensaje de usuario con el mensaje de sistema o convertirá el mensaje de sistema en mensaje de usuario si el siguiente mensaje no es de usuario.                         `skip` eliminará el mensaje del sistema), por defecto `developer`."
+          },
+          "enableStreaming": {
+            "title": "Indica si se utilizará la API de streaming. `true` por defecto."
+          },
+          "id": {
+            "title": "Un identificador único que se utiliza en la interfaz de usuario para identificar el modelo personalizado."
+          },
+          "mdDescription": "Integra modelos personalizados compatibles con la API OpenAI, por ejemplo a través de `vllm`. Los atributos necesarios son `model` y `url`.            \n            Opcionalmente, puede     \n            - especificar un `id` único para identificar el modelo personalizado en la interfaz de usuario. Si no se especifica ninguno, se utilizará `model` como `id`.            \n            - proporcionar una `apiKey` para acceder a la API servida en la url dada. Utilice `true` para indicar el uso de la clave global de la API OpenAI.            \n            - provide an `apiVersion` para acceder a la API servida en la url dada en Azure. Utilice `true` para indicar el uso de la versión global de la API OpenAI.            \n            - establece `developerMessageSettings` como uno de los siguientes: `user`, `system`, `developer`, `mergeWithFollowingUserMessage`, o `skip` para controlar cómo se incluye el mensaje del desarrollador (donde `user`, `system`, y `developer` se utilizarán como rol, `mergeWithFollowingUserMessage` prefijará el siguiente mensaje de usuario con el mensaje del sistema o convertirá el mensaje del sistema en mensaje de usuario si el siguiente mensaje no es un mensaje de usuario. La opción \"skip\" eliminará el mensaje del sistema).            Por defecto es `developer`.            \n            - especifique `supportsStructuredOutput: false` para indicar que no se utilizará la salida estructurada.            \n            - especificar `enableStreaming: false` para indicar que no se utilizará el streaming.            \n            Consulte [nuestra documentación](https://theia-ide.org/docs/user_ai/#openai-compatible-models-eg-via-vllm) para obtener más información.",
+          "modelId": {
+            "title": "Model ID"
+          },
+          "supportsStructuredOutput": {
+            "title": "Indica si el modelo admite salida estructurada. `true` por defecto."
+          },
+          "url": {
+            "title": "El punto final compatible con la API de IA abierta donde está alojado el modelo"
+          }
+        },
+        "models": {
+          "description": "Modelos oficiales de OpenAI"
+        },
+        "useResponseApi": {
+          "mdDescription": "Utiliza la nueva OpenAI Response API en lugar de la Chat Completion API para los modelos oficiales de OpenAI. Este ajuste sólo se aplica a los modelos oficiales de OpenAI - los proveedores personalizados deben configurarlo individualmente."
+        }
+      },
+      "promptTemplates": {
+        "directories": {
+          "title": "Directorios de plantillas de avisos específicos del espacio de trabajo"
+        },
+        "extensions": {
+          "description": "Lista de extensiones de archivo adicionales en ubicaciones prompt que se consideran plantillas prompt. '.prompttemplate' siempre se considera por defecto.",
+          "title": "Extensiones adicionales de archivos de plantillas de avisos"
+        },
+        "files": {
+          "title": "Archivos de plantillas de avisos específicos del espacio de trabajo"
+        }
+      },
+      "scanoss": {
+        "changeSet": {
+          "clean": "Sin coincidencias",
+          "error": "Error: Reejecutar",
+          "error-notification": "Error ScanOSS encontrado: {0}.",
+          "match": "Ver Partidos",
+          "scan": "Escanear",
+          "scanning": "Escaneando..."
+        },
+        "mode": {
+          "automatic": {
+            "description": "Activar la exploración automática de fragmentos de código en las vistas de chat."
+          },
+          "description": "Configure la función SCANOSS para analizar fragmentos de código en las vistas de chat. Esto enviará un hash de fragmentos de código sugeridos al servicio SCANOSS\nalojado en la [Software Transparency foundation](https://www.softwaretransparency.org/osskb) para su análisis.",
+          "manual": {
+            "description": "El usuario puede activar manualmente el escaneo haciendo clic en el elemento SCANOSS de la vista de chat."
+          },
+          "off": {
+            "description": "La función está completamente desactivada."
+          }
+        },
+        "snippet": {
+          "dialog-header": "Resultados de ScanOSS",
+          "errored": "SCANOSS - Error - {0}",
+          "file-name-heading": "Coincidencia encontrada en {0}",
+          "in-progress": "SCANOSS - Realizar escaneo...",
+          "match-count": "Encontradas {0} coincidencia(s)",
+          "matched": "SCANOSS - Encontrada coincidencia {0} ",
+          "no-match": "SCANOSS - Ninguna coincidencia",
+          "summary": "Resumen"
+        }
+      },
+      "session-settings-dialog": {
+        "title": "Configuración de la sesión",
+        "tooltip": "Configuración de la sesión"
+      },
+      "terminal": {
+        "agent": {
+          "description": "Este agente proporciona asistencia para escribir y ejecutar comandos arbitrarios en el terminal.         Basándose en la petición del usuario, sugiere comandos y permite al usuario pegarlos y ejecutarlos directamente en el terminal.         Accede al directorio actual, al entorno y a la salida reciente de la sesión de terminal para proporcionar asistencia contextual.",
+          "vars": {
+            "cwd": {
+              "description": "El directorio de trabajo actual."
+            },
+            "recentTerminalContents": {
+              "description": "Las últimas 0 a 50 líneas recientes visibles en el terminal."
+            },
+            "shell": {
+              "description": "El shell que se está utilizando, por ejemplo, /usr/bin/zsh."
+            },
+            "userRequest": {
+              "description": "Pregunta o solicitud del usuario."
+            }
+          }
+        },
+        "askAi": "Pregunte a la IA",
+        "askTerminalCommand": "Pregunta sobre un comando de terminal...",
+        "hitEnterConfirm": "Pulsa intro para confirmar",
+        "howCanIHelp": "¿En qué puedo ayudarle?",
+        "loading": "Cargando",
+        "tryAgain": "Inténtalo de nuevo...",
+        "useArrowsAlternatives": " o utilizar ⇅ para mostrar alternativas..."
+      },
+      "tokenUsage": {
+        "cachedInputTokens": "Fichas de entrada escritas en caché",
+        "cachedInputTokensTooltip": "Rastreados adicionalmente a 'Tokens de entrada'. Suelen ser más caras que las fichas no almacenadas en caché.",
+        "failedToGetTokenUsageData": "No se han podido recuperar los datos de uso de los tokens: {0}",
+        "inputTokens": "Fichas de entrada",
+        "label": "Uso de fichas",
+        "lastUsed": "Último usado",
+        "model": "Modelo",
+        "noData": "Aún no se dispone de datos sobre el uso de fichas.",
+        "note": "El uso de tokens se rastrea desde el inicio de la aplicación y no persiste.",
+        "outputTokens": "Fichas de salida",
+        "readCachedInputTokens": "Fichas de entrada leídas de la caché",
+        "readCachedInputTokensTooltip": "Rastreado adicionalmente a 'Input Token'. Suele ser mucho menos costoso que si no se almacena en caché. Normalmente no cuenta para los límites de velocidad.",
+        "total": "Total",
+        "totalTokens": "Total de fichas",
+        "totalTokensTooltip": "\"Fichas de entrada\" + \"Fichas de salida"
+      },
+      "vercelai": {
+        "anthropicApiKey": {
+          "mdDescription": "Introduzca una clave API para los modelos antrópicos. **Tenga en cuenta que la clave API se almacena en texto claro en la máquina que ejecuta Theia. Utilice la variable de entorno `ANTHROPIC_API_KEY` para establecer la clave de forma segura."
+        },
+        "customEndpoints": {
+          "apiKey": {
+            "title": "O bien la clave para acceder a la API servida en la url dada o `true` para utilizar la clave global de la API."
+          },
+          "enableStreaming": {
+            "title": "Indica si se utilizará la API de streaming. `true` por defecto."
+          },
+          "id": {
+            "title": "Un identificador único que se utiliza en la interfaz de usuario para identificar el modelo personalizado."
+          },
+          "mdDescription": "Integra modelos personalizados compatibles con el SDK de IA de Vercel. Los atributos necesarios son `model` y `url`.            \n            Opcionalmente, puede     \n            - especificar un `id` único para identificar el modelo personalizado en la interfaz de usuario. Si no se especifica ninguno, se utilizará `model` como `id`.            \n            - proporcionar una `apiKey` para acceder a la API servida en la url dada. Utilice `true` para indicar el uso de la clave de API global.            \n            - especifique `supportsStructuredOutput: false` para indicar que no se utilizará la salida estructurada.            \n            - especifique `enableStreaming: false` para indicar que no se utilizará el streaming.            \n            - especifique `provider` para indicar de qué proveedor es el modelo (openai, anthropic).",
+          "modelId": {
+            "title": "Model ID"
+          },
+          "supportsStructuredOutput": {
+            "title": "Indica si el modelo admite salida estructurada. `true` por defecto."
+          },
+          "url": {
+            "title": "El punto final de la API donde se aloja el modelo"
+          }
+        },
+        "models": {
+          "description": "Modelos oficiales para utilizar con Vercel AI SDK",
+          "id": {
+            "title": "Model ID"
+          },
+          "model": {
+            "title": "Nombre del modelo"
+          }
+        },
+        "openaiApiKey": {
+          "mdDescription": "Introduzca una clave API para modelos OpenAI. **Por favor tenga en cuenta:** Al utilizar esta preferencia la clave API se almacenará en texto claro en la máquina que ejecuta Theia. Utilice la variable de entorno `OPENAI_API_KEY` para establecer la clave de forma segura."
+        }
+      },
+      "workspace": {
+        "coderAgent": {
+          "description": "Un asistente de IA integrado en Theia IDE, diseñado para ayudar a los desarrolladores de software. Este agente puede acceder al espacio de trabajo del usuario, puede obtener una lista de todos los archivos y carpetas disponibles y recuperar su contenido. Además, puede sugerir al usuario modificaciones de archivos. Por lo tanto, puede ayudar al usuario con tareas de codificación u otras tareas que impliquen cambios en los archivos."
+        },
+        "considerGitignore": {
+          "description": "Si se activa, excluye los archivos/carpetas especificados en un archivo global .gitignore (la ubicación esperada es la raíz del espacio de trabajo).",
+          "title": "Considere .gitignore"
+        },
+        "excludedPattern": {
+          "description": "Lista de patrones (glob o regex) para archivos/carpetas a excluir.",
+          "title": "Patrones de archivos excluidos"
+        },
+        "searchMaxResults": {
+          "description": "Número máximo de resultados de búsqueda devueltos por la función de búsqueda de espacios de trabajo.",
+          "title": "Máximos resultados de búsqueda"
+        },
+        "workspaceAgent": {
+          "description": "Un asistente de IA integrado en Theia IDE, diseñado para ayudar a los desarrolladores de software. Este agente puede acceder al espacio de trabajo del usuario, puede obtener una lista de todos los archivos y carpetas disponibles y recuperar su contenido. No puede modificar archivos. Por lo tanto, puede responder a preguntas sobre el proyecto actual, los archivos del proyecto y el código fuente en el espacio de trabajo, como por ejemplo cómo construir el proyecto, dónde colocar el código fuente, dónde encontrar código o configuraciones específicas, etc."
+        }
+      }
+    },
+    "ai-chat": {
+      "fileChangeSetTitle": "Cambios propuestos"
+    },
+    "ai-chat-ui": {
+      "initiate-session-task-context": "Tarea Contexto: Iniciar sesión",
+      "open-current-session-summary": "Resumen de la sesión en curso",
+      "open-settings-tooltip": "Abrir ajustes de IA...",
+      "scroll-lock": "Bloquear desplazamiento",
+      "scroll-unlock": "Desbloquear pergamino",
+      "session-settings": "Configuración de la sesión",
+      "showChats": "Mostrar chats...",
+      "summarize-current-session": "Resumen de la sesión actual"
+    },
+    "ai-claude-code": {
+      "open-config": "Configuración del Código Claude Abierto",
+      "open-memory": "Abrir la memoria del código Claude (CLAUDE.MD)"
+    },
+    "ai-core": {
+      "agentCompletionMessage": "El agente \"{0}\" ha completado su tarea.",
+      "agentCompletionTitle": "Agente \"{0}\" Tarea completada",
+      "agentCompletionWithTask": "El agente \"{0}\" ha completado la tarea: {1}"
+    },
+    "ai-editor": {
+      "contextMenu": "Pregunte a AI",
+      "sendToChat": "Enviar a AI Chat"
+    },
+    "ai-ide": {
+      "addressGhReviewCommand": {
+        "argumentHint": "<pr-number/>",
+        "description": "Comentarios de revisión de direcciones en una solicitud de extracción de GitHub"
+      },
+      "fixGhTicketCommand": {
+        "argumentHint": "<ticket-number/>",
+        "description": "Analizar un ticket de GitHub e implementar la solución."
+      },
+      "open-agent-settings-tooltip": "Abrir la configuración del Agente...",
+      "rememberCommand": {
+        "argumentHint": "[sugerencia sobre el tema]",
+        "description": "Extraer temas de conversación y actualizar la información del proyecto."
+      },
+      "ticketCommand": {
+        "argumentHint": "<ticket-number/>",
+        "description": "Analizar un ticket de GitHub y crear un plan de implementación."
+      },
+      "todoTool": {
+        "noTasks": "Sin tareas"
+      },
+      "withAppTesterCommand": {
+        "description": "Delegar las pruebas al agente AppTester (requiere modo agente)"
+      }
+    },
+    "ai-mcp": {
+      "blockedServersLabel": "Servidores MCP (autoinicio bloqueado)"
+    },
+    "ai-terminal": {
+      "cancelExecution": "Cancelar ejecución del comando",
+      "canceling": "Cancelando...",
+      "confirmExecution": "Confirmar comando Shell",
+      "denialReason": "Razón",
+      "executionCanceled": "Cancelado",
+      "executionDenied": "Denegado",
+      "executionDeniedWithReason": "Denegado con razón",
+      "noOutput": "Sin salida",
+      "partialOutput": "Salida parcial",
+      "timeout": "Tiempo de espera",
+      "workingDirectory": "Directorio de trabajo"
+    },
+    "callhierarchy": {
+      "noCallers": "No se ha detectado ninguna llamada.",
+      "open": "Jerarquía de la convocatoria abierta"
+    },
+    "chat": {
+      "taskContextVariable": {
+        "args": {
+          "contextId": {
+            "description": "El ID del contexto de la tarea a recuperar, o una sesión de chat a resumir."
+          }
+        },
+        "description": "Proporciona información contextual para una tarea, por ejemplo, el plan para completar una tarea o un resumen de las sesiones anteriores.",
+        "label": "Contexto de la tarea"
+      }
+    },
+    "collaboration": {
+      "collaborate": "Colabore",
+      "collaboration": "Colaboración",
+      "collaborationWorkspace": "Espacio de trabajo colaborativo",
+      "connected": "Conectado",
+      "connectedSession": "Conectado a una sesión de colaboración",
+      "copiedInvitation": "Código de invitación copiado en el portapapeles.",
+      "copyAgain": "Copiar de nuevo",
+      "createRoom": "Crear una nueva sesión de colaboración",
+      "creatingRoom": "Crear sesión",
+      "end": "Fin de la sesión de colaboración",
+      "endDetail": "Finalizar la sesión, dejar de compartir contenidos y revocar el acceso a otras personas.",
+      "enterCode": "Introduzca el código de la sesión de colaboración",
+      "failedCreate": "No se ha podido crear la sala: {0}",
+      "failedJoin": "No se ha podido entrar en la sala: {0}",
+      "fieldRequired": "El campo {0} es obligatorio. Login abortado.",
+      "invite": "Invitar a otros",
+      "inviteDetail": "Copie el código de invitación para compartirlo con otras personas y unirse a la sesión.",
+      "joinRoom": "Unirse a la sesión de colaboración",
+      "joiningRoom": "Sesión inaugural",
+      "leave": "Abandonar la sesión de colaboración",
+      "leaveDetail": "Desconectar de la sesión de colaboración actual y cerrar el espacio de trabajo.",
+      "loginFailed": "Login fallido.",
+      "loginSuccessful": "Inicio de sesión con éxito.",
+      "noAuth": "El servidor no proporciona ningún método de autenticación.",
+      "optional": "opcional",
+      "selectAuth": "Seleccione el método de autenticación",
+      "selectCollaboration": "Seleccione la opción de colaboración",
+      "serverUrl": "URL del servidor",
+      "serverUrlDescription": "URL de la instancia del Open Collaboration Tools Server para sesiones de colaboración en directo",
+      "sharedSession": "Compartió una sesión de colaboración",
+      "startSession": "Iniciar o unirse a una sesión de colaboración",
+      "userWantsToJoin": "Usuario '{0}' quiere unirse a la sala de colaboración",
+      "whatToDo": "¿Qué le gustaría hacer con otros colaboradores?"
+    },
+    "core": {
+      "about": {
+        "compatibility": "{0} Compatibilidad",
+        "defaultApi": "API por defecto {0} ",
+        "listOfExtensions": "Lista de extensiones"
+      },
+      "common": {
+        "closeAll": "Cerrar todas las pestañas",
+        "closeAllTabMain": "Cerrar todas las pestañas del área principal",
+        "closeOtherTabMain": "Cerrar otras pestañas en el área principal",
+        "closeOthers": "Cerrar otras pestañas",
+        "closeRight": "Cerrar pestañas a la derecha",
+        "closeTab": "Cerrar pestaña",
+        "closeTabMain": "Cerrar la pestaña en el área principal",
+        "collapseAllTabs": "Contraer todos los paneles laterales",
+        "collapseBottomPanel": "Panel inferior de la palanca",
+        "collapseLeftPanel": "Panel izquierdo",
+        "collapseRightPanel": "Panel derecho",
+        "collapseTab": "Colapso del panel lateral",
+        "showNextTabGroup": "Pasar al siguiente grupo de pestañas",
+        "showNextTabInGroup": "Pasar a la siguiente pestaña del grupo",
+        "showPreviousTabGroup": "Cambiar al grupo de pestañas anterior",
+        "showPreviousTabInGroup": "Pasar a la pestaña anterior del grupo",
+        "toggleMaximized": "Alternar maximizado"
+      },
+      "copyInfo": "Abra primero un archivo para copiar su ruta",
+      "copyWarn": "Utilice el comando de copia del navegador o el acceso directo.",
+      "cutWarn": "Utiliza el comando o atajo de teclado del navegador.",
+      "enhancedPreview": {
+        "classic": "Muestra una vista previa sencilla de la ficha con información básica.",
+        "enhanced": "Mostrar una vista previa mejorada de la ficha con información adicional.",
+        "visual": "Muestra una vista previa visual de la pestaña."
+      },
+      "file": {
+        "browse": "Visite"
+      },
+      "highlightModifiedTabs": "Controla si se dibuja un borde superior en las pestañas modificadas (sucias) del editor o no.",
+      "keybinding": {
+        "duplicateModifierError": "No se puede analizar el keybinding {0} Modificadores duplicados",
+        "metaError": "No se puede parsear keybinding {0} meta es sólo para OSX",
+        "unrecognizedKeyError": "Clave no reconocida {0} en {1}"
+      },
+      "keybindingStatus": "{0} fue presionado, esperando más teclas",
+      "keyboard": {
+        "choose": "Elija la disposición del teclado",
+        "chooseLayout": "Elija una disposición de teclado",
+        "current": "(corriente: {0})",
+        "currentLayout": " - diseño actual",
+        "mac": "Teclados Mac",
+        "pc": "Teclados para PC",
+        "tryDetect": "Intenta detectar la distribución del teclado a partir de la información del navegador y de las teclas pulsadas."
+      },
+      "navigator": {
+        "clipboardWarn": "El acceso al portapapeles está denegado. Comprueba los permisos de tu navegador.",
+        "clipboardWarnFirefox": "La API del portapapeles no está disponible. Se puede activar mediante la preferencia '{0}' en la página '{1}'. A continuación, vuelva a cargar Theia. Tenga en cuenta que esto permitirá a FireFox tener acceso completo al portapapeles del sistema."
+      },
+      "offline": "Fuera de línea",
+      "pasteWarn": "Por favor, utilice el comando de pegar o el atajo de teclado del navegador.",
+      "quitMessage": "Cualquier cambio no guardado no se guardará.",
+      "resetWorkbenchLayout": "Restablecer la disposición del banco de trabajo",
+      "searchbox": {
+        "close": "Cerrar (Escapar)",
+        "next": "Siguiente (abajo)",
+        "previous": "Anterior (Arriba)",
+        "showAll": "Mostrar todos los artículos",
+        "showOnlyMatching": "Mostrar solo los artículos coincidentes"
+      },
+      "secondaryWindow": {
+        "alwaysOnTop": "Cuando está activada, la ventana secundaria se mantiene por encima de todas las demás ventanas, incluidas las de distintas aplicaciones.",
+        "description": "Establece la posición inicial y el tamaño de la ventana secundaria extraída.",
+        "fullSize": "La posición y el tamaño del widget extraído serán los mismos que los de la aplicación Theia en ejecución.",
+        "halfWidth": "La posición y el tamaño del widget extraído serán la mitad de la anchura de la aplicación Theia en ejecución.",
+        "originalSize": "La posición y el tamaño del widget extraído serán los mismos que los del widget original."
+      },
+      "severity": {
+        "log": "Registro"
+      },
+      "silentNotifications": "Controla si se suprimen las ventanas emergentes de notificación.",
+      "tabDefaultSize": "Especifica el tamaño por defecto de las pestañas.",
+      "tabMaximize": "Controla si se maximizan las pestañas al hacer doble clic.",
+      "tabMinimumSize": "Especifica el tamaño mínimo de las pestañas.",
+      "tabShrinkToFit": "Reduzca las pestañas para adaptarlas al espacio disponible.",
+      "window": {
+        "tabCloseIconPlacement": {
+          "description": "Coloque los iconos de cierre en los títulos de las pestañas al principio o al final de la pestaña. El valor predeterminado es el final en todas las plataformas.",
+          "end": "Coloque el icono de cierre al final de la etiqueta. En los idiomas de izquierda a derecha, se trata del lado derecho de la etiqueta.",
+          "start": "Coloque el icono de cierre al principio de la etiqueta. En los idiomas de izquierda a derecha, se trata del lado izquierdo de la etiqueta."
+        }
+      },
+      "window.menuBarVisibility": "El menú se muestra como un botón compacto en la barra lateral. Este valor se ignora cuando{0}  es {1}."
+    },
+    "debug": {
+      "TheiaIDE": "IDE Theia",
+      "addConfigurationPlaceholder": "Seleccione la raíz del espacio de trabajo para añadir la configuración",
+      "breakpoint": "punto de interrupción",
+      "cannotRunToThisLocation": "No se ha podido ejecutar el hilo actual en la ubicación especificada.",
+      "compound-cycle": "La configuración de lanzamiento '{0}' contiene un ciclo consigo mismo",
+      "conditionalBreakpoint": "Punto de interrupción condicional",
+      "conditionalBreakpointsNotSupported": "Puntos de interrupción condicionales no admitidos por este tipo de depuración",
+      "confirmRunToShiftedPosition_msg": "La posición del objetivo se desplazará a Ln {0}, Col {1}. ¿Correr de todos modos?",
+      "confirmRunToShiftedPosition_title": "No se puede ejecutar el hilo actual exactamente a la ubicación especificada",
+      "consoleFilter": "Filtro (por ejemplo, texto, !excluir)",
+      "consoleFilterAriaLabel": "Filtrar la salida de la consola de depuración",
+      "consoleSessionSelectorTooltip": "Cambiar entre sesiones de depuración. Cada sesión de depuración tiene su propia salida de consola.",
+      "consoleSeverityTooltip": "Filtrar la salida de la consola por nivel de gravedad. Solo se mostrarán los mensajes con la gravedad seleccionada.",
+      "continueAll": "Continuar todo",
+      "copyExpressionValue": "Copiar el valor de la expresión",
+      "couldNotRunTask": "No se ha podido ejecutar la tarea '{0}'.",
+      "dataBreakpoint": "punto de interrupción de datos",
+      "debugConfiguration": "Configuración de depuración",
+      "debugSessionInitializationFailed": "Error en la inicialización de la sesión de depuración. Consulte la consola para obtener más detalles.",
+      "debugSessionTypeNotSupported": "El tipo de sesión de depuración \"{0}\" no es compatible.",
+      "debugToolbarMenu": "Menú de la barra de herramientas de depuración",
+      "debugVariableInput": "Establecer {0} Valor",
+      "disableSelectedBreakpoints": "Desactivar puntos de interrupción seleccionados",
+      "disabledBreakpoint": "Discapacitados {0}",
+      "enableSelectedBreakpoints": "Activar puntos de interrupción seleccionados",
+      "entry": "entrada",
+      "errorStartingDebugSession": "Se ha producido un error al iniciar la sesión de depuración, compruebe los registros para obtener más detalles.",
+      "exception": "excepción",
+      "functionBreakpoint": "punto de interrupción de la función",
+      "goto": "ir a",
+      "htiConditionalBreakpointsNotSupported": "Marcar puntos de interrupción condicionales no soportados por este tipo de depuración",
+      "instruction-breakpoint": "Punto de interrupción de la instrucción",
+      "instructionBreakpoint": "punto de interrupción de instrucción",
+      "logpointsNotSupported": "Puntos de registro no compatibles con este tipo de depuración",
+      "missingConfiguration": "La configuración dinámica '{0}:{1}' falta o no es aplicable",
+      "pause": "pausa",
+      "pauseAll": "Pausa Todo",
+      "reveal": "Revelar",
+      "step": "paso",
+      "taskTerminatedBySignal": "Tarea '{0}' terminada por la señal {1}.",
+      "taskTerminatedForUnknownReason": "Tarea '{0}' terminada por razón desconocida.",
+      "taskTerminatedWithExitCode": "Tarea '{0}' terminada con código de salida {1}.",
+      "threads": "Hilos",
+      "toggleTracing": "Activar/desactivar las comunicaciones de rastreo con los adaptadores de depuración",
+      "unknownSession": "Sesión desconocida",
+      "unverifiedBreakpoint": "Sin verificar {0}"
+    },
+    "editor": {
+      "diffEditor.wordWrap2": "Las líneas se ajustarán según la configuración de `#editor.wordWrap#`.",
+      "dirtyEncoding": "El archivo está sucio. Por favor, guárdelo primero antes de volver a abrirlo con otra codificación.",
+      "editor.bracketPairColorization.enabled": "Controla si la coloración del par de corchetes está activada o no. Utilice `#workbench.colorCustomizations#` para anular los colores de resaltado de los corchetes.",
+      "editor.codeActions.triggerOnFocusChange": "Habilitar la activación de `#editor.codeActionsOnSave#` cuando `#files.autoSave#` se establece en `afterDelay`. Las acciones de código deben tener el valor `always` para que se activen con los cambios de ventana y de foco.",
+      "editor.detectIndentation": "Controla si `#editor.tabSize#` y `#editor.insertSpaces#` se detectarán automáticamente al abrir un archivo en función de su contenido.",
+      "editor.experimental.preferTreeSitter": "Controla si se debe activar el análisis de Tree Sitter para idiomas específicos. Esto tendrá prioridad sobre `editor.experimental.treeSitterTelemetry` para los idiomas especificados.",
+      "editor.inlayHints.enabled1": "Los consejos de incrustación se muestran por defecto y se ocultan cuando se mantiene `Ctrl+Alt`.",
+      "editor.inlayHints.enabled2": "Los consejos de incrustación están ocultos por defecto y se muestran cuando se mantiene pulsado `Ctrl+Alt`.",
+      "editor.inlayHints.fontFamily": "Controla la familia de fuentes de las sugerencias de incrustación en el editor. Si está vacío, se utiliza `#editor.fontFamily#`.",
+      "editor.inlayHints.fontSize": "Controla el tamaño de la fuente de las sugerencias de incrustación en el editor. Por defecto se utiliza `#editor.fontSize#` cuando el valor configurado es menor que `5` o mayor que el tamaño de fuente del editor.",
+      "editor.inlineSuggest.edits.experimental.enabled": "Controla si se habilitan las ediciones experimentales en las sugerencias en línea.",
+      "editor.inlineSuggest.edits.experimental.onlyShowWhenCloseToCursor": "Controla si sólo se muestran sugerencias en línea cuando el cursor está cerca de la sugerencia.",
+      "editor.inlineSuggest.edits.experimental.useInterleavedLinesDiff": "Controla si se activa la difusión experimental de líneas intercaladas en las sugerencias en línea.",
+      "editor.inlineSuggest.edits.experimental.useMixedLinesDiff": "Controla si se habilitan las ediciones experimentales en las sugerencias en línea.",
+      "editor.insertSpaces": "Insertar espacios al pulsar `Tab`. Este ajuste se anula en función del contenido del archivo cuando `#editor.detectIndentation#` está activado.",
+      "editor.quickSuggestions": "Controla si las sugerencias deben aparecer automáticamente mientras se escribe. Esto puede controlarse para escribir comentarios, cadenas y otros códigos. La sugerencia rápida puede ser configurada para mostrarse como texto fantasma o con el widget de sugerencia. También hay que tener en cuenta la configuración '#editor.suggestOnTriggerCharacters#' que controla si las sugerencias son activadas por caracteres especiales.",
+      "editor.suggestFontSize": "Tamaño de fuente para el widget de sugerencia. Cuando se establece en `0`, se utiliza el valor de `#editor.fontSize#`.",
+      "editor.suggestLineHeight": "Altura de línea para el widget de sugerencia. Cuando se establece en `0`, se utiliza el valor de `#editor.lineHeight#`. El valor mínimo es 8.",
+      "editor.tabSize": "El número de espacios a los que equivale un tabulador. Este ajuste se anula en función del contenido del archivo cuando `#editor.detectIndentation#` está activado.",
+      "formatOnSaveTimeout": "Tiempo de espera en milisegundos tras el cual se cancela el formato que se ejecuta al guardar el archivo.",
+      "persistClosedEditors": "Controla si se mantiene el historial del editor cerrado para el espacio de trabajo a través de las recargas de la ventana.",
+      "showAllEditors": "Mostrar todos los editores abiertos",
+      "splitHorizontal": "Editor de división horizontal",
+      "splitVertical": "Split Editor Vertical",
+      "toggleStickyScroll": "Alternar desplazamiento permanente"
+    },
+    "external-terminal": {
+      "cwd": "Seleccionar el directorio de trabajo actual para el nuevo terminal externo"
+    },
+    "file-search": {
+      "toggleIgnoredFiles": " (Pulse {0} para mostrar/ocultar los archivos ignorados)"
+    },
+    "fileDialog": {
+      "showHidden": "Mostrar archivos ocultos"
+    },
+    "fileSystem": {
+      "fileResource": {
+        "overWriteBody": "¿Quiere sobrescribir los cambios realizados en '{0}' en el sistema de archivos?"
+      }
+    },
+    "filesystem": {
+      "copiedToClipboard": "Copiado el enlace de descarga en el portapapeles.",
+      "copyDownloadLink": "Copiar el enlace de descarga",
+      "dialog": {
+        "initialLocation": "Ir a la ubicación inicial",
+        "multipleItemMessage": "Sólo puede seleccionar un elemento",
+        "navigateBack": "Navegar hacia atrás",
+        "navigateForward": "Navegar hacia adelante",
+        "navigateUp": "Navegar hacia arriba en un directorio"
+      },
+      "fileResource": {
+        "binaryFileQuery": "Abrirlo puede llevar algún tiempo y puede hacer que el IDE no responda. ¿Quiere abrir '{0}' de todos modos?",
+        "binaryTitle": "El archivo es binario o utiliza una codificación de texto no admitida.",
+        "largeFileTitle": "El archivo es demasiado grande ({0}).",
+        "overwriteTitle": "El archivo '{0}' ha sido modificado en el sistema de archivos."
+      },
+      "filesExclude": "Configurar patrones glob para excluir archivos y carpetas. Por ejemplo, el Explorador de archivos decide qué archivos y carpetas mostrar u ocultar en función de esta configuración.",
+      "format": "Formato:",
+      "maxConcurrentUploads": "Número máximo de archivos concurrentes a subir cuando se suben varios archivos. 0 significa que todos los archivos se subirán simultáneamente.",
+      "maxFileSizeMB": "Controla el tamaño máximo de archivo en MB que es posible abrir.",
+      "prepareDownload": "Preparando la descarga...",
+      "prepareDownloadLink": "Preparando enlace de descarga...",
+      "processedOutOf": "Procesado {0} de {1}",
+      "replaceTitle": "Sustituir archivo",
+      "uploadFailed": "Se ha producido un error al cargar un archivo. {0}",
+      "uploadFiles": "Subir archivos...",
+      "uploadedOutOf": "Cargado {0} de {1}"
+    },
+    "getting-started": {
+      "ai": {
+        "header": "¡Ya está disponible la asistencia de IA en el IDE Theia (versión beta)!",
+        "openAIChatView": "¡Abre ahora la vista de chat con IA para aprender cómo empezar!"
+      },
+      "apiComparator": "{0} Compatibilidad con la API",
+      "newExtension": "Construir una nueva extensión",
+      "newPlugin": "Creación de un nuevo plugin",
+      "startup-editor": {
+        "welcomePage": "Abra la página de bienvenida, con contenidos que le ayudarán a empezar a utilizar {0} y las extensiones."
+      },
+      "telemetry": "Uso de datos y telemetría"
+    },
+    "git": {
+      "aFewSecondsAgo": "hace unos segundos",
+      "addSignedOff": "Agregar a la lista de firmas",
+      "added": "Añadido",
+      "amendReuseMessage": "Para reutilizar el último mensaje de confirmación, pulse \"Enter\" o \"Escape\" para cancelar.",
+      "amendRewrite": "Reescribir el mensaje de confirmación anterior. Pulse 'Enter' para confirmar o 'Escape' para cancelar.",
+      "checkoutCreateLocalBranchWithName": "Cree una nueva sucursal local con el nombre: {0}. Pulse 'Enter' para confirmar o 'Escape' para cancelar.",
+      "checkoutProvideBranchName": "Por favor, indique el nombre de la sucursal.",
+      "checkoutSelectRef": "Selecciona una referencia para hacer el checkout o crea una nueva sucursal local:",
+      "cloneQuickInputLabel": "Por favor, indique la ubicación del repositorio Git. Pulse 'Enter' para confirmar o 'Escape' para cancelar.",
+      "cloneRepository": "Clona el repositorio Git: {0}. Pulsa 'Enter' para confirmar o 'Escape' para cancelar.",
+      "compareWith": "Compara con...",
+      "compareWithBranchOrTag": "Elija una rama o etiqueta para comparar con la rama {0} actualmente activa:",
+      "conflicted": "Conflicto",
+      "copied": "Copied",
+      "diff": "Diff",
+      "dirtyDiffLinesLimit": "No mostrar decoraciones diff sucias, si el número de líneas del editor supera este límite.",
+      "dropStashMessage": "El alijo se ha eliminado con éxito.",
+      "editorDecorationsEnabled": "Mostrar las decoraciones git en el editor.",
+      "fetchPickRemote": "Escoge un mando a distancia desde el que buscar:",
+      "gitDecorationsColors": "Utilice la decoración de colores en el navegador.",
+      "mergeEditor": {
+        "currentSideTitle": "Actual",
+        "incomingSideTitle": "Entrante"
+      },
+      "mergeQuickPickPlaceholder": "Elige una rama para fusionar con la rama {0} actualmente activa:",
+      "missingUserInfo": "Asegúrate de configurar tu 'user.name' y 'user.email' en git.",
+      "noHistoryForError": "No hay historial disponible para {0}",
+      "noPreviousCommit": "No hay compromiso previo para modificar",
+      "noRepositoriesSelected": "No se ha seleccionado ningún repositorio.",
+      "prepositionIn": "en",
+      "renamed": "Renombrado",
+      "repositoryNotInitialized": "El repositorio {0} aún no está inicializado.",
+      "stashChanges": "Cambios en el alijo. Pulse \"Enter\" para confirmar o \"Escape\" para cancelar.",
+      "stashChangesWithMessage": "Cambios en el alijo con mensaje: {0}. Pulse 'Enter' para confirmar o 'Escape' para cancelar.",
+      "tabTitleIndex": "{0} (índice)",
+      "tabTitleWorkingTree": "{0} (Árbol de trabajo)",
+      "toggleBlameAnnotations": "Alternar las anotaciones de culpabilidad",
+      "unstaged": "Sin montar"
+    },
+    "keybinding-schema-updater": {
+      "deprecation": "Utilice la cláusula `when` en su lugar."
+    },
+    "keymaps": {
+      "addKeybindingTitle": "Añadir Keybinding para {0}",
+      "editKeybinding": "Editar asignación de teclas...",
+      "editKeybindingTitle": "Editar enlace de teclas para {0}",
+      "editWhenExpression": "Editar cuando la expresión...",
+      "editWhenExpressionTitle": "Editar cuando Expresión para {0}",
+      "keybinding": {
+        "copy": "Copiar enlace de teclas",
+        "copyCommandId": "Copiar ID de comando de combinación de teclas",
+        "copyCommandTitle": "Copiar comando de combinación de teclas Título",
+        "edit": "Editar asignación de teclas...",
+        "editWhenExpression": "Editar vinculación de teclas cuando la expresión..."
+      },
+      "keybindingCollidesValidation": "la vinculación de teclas actualmente colisiona",
+      "requiredKeybindingValidation": "se requiere el valor del keybinding",
+      "resetKeybindingConfirmation": "¿Realmente quieres restablecer este keybinding a su valor por defecto?",
+      "resetKeybindingTitle": "Restablecer la unión de teclas para {0}",
+      "resetMultipleKeybindingsWarning": "Si existen varias combinaciones de teclas para este comando, todas ellas se restablecerán."
+    },
+    "localize": {
+      "offlineTooltip": "No se puede conectar al backend."
+    },
+    "markers": {
+      "clearAll": "Borrar todo",
+      "noProblems": "Hasta ahora no se han detectado problemas en el espacio de trabajo.",
+      "tabbarDecorationsEnabled": "Mostrar decoradores de problemas (marcadores de diagnóstico) en las barras de pestañas."
+    },
+    "memory-inspector": {
+      "addressTooltip": "Ubicación de la memoria a mostrar, una dirección o expresión que se evalúa a una dirección",
+      "ascii": "ASCII",
+      "binary": "Binario",
+      "byteSize": "Tamaño del byte",
+      "bytesPerGroup": "Bytes por grupo",
+      "closeSettings": "Cerrar Ajustes",
+      "columns": "Columnas",
+      "command": {
+        "createNewMemory": "Crear un nuevo inspector de memoria",
+        "createNewRegisterView": "Crear una nueva vista de registro",
+        "followPointer": "Siga el puntero",
+        "followPointerMemory": "Seguir el puntero en el inspector de memoria",
+        "resetValue": "Valor de reposición",
+        "showRegister": "Mostrar registro en el inspector de memoria",
+        "viewVariable": "Mostrar la variable en el inspector de memoria"
+      },
+      "data": "Datos",
+      "decimal": "Decimal",
+      "diff": {
+        "label": "Diff: {0}"
+      },
+      "diff-widget": {
+        "offset-label": "{0} Offset",
+        "offset-title": "Bytes para compensar la memoria de {0}"
+      },
+      "editable": {
+        "apply": "Aplicar cambios",
+        "clear": "Cambios claros"
+      },
+      "endianness": "Endiosamiento",
+      "extraColumn": "Extra Column",
+      "groupsPerRow": "Grupos por fila",
+      "hexadecimal": "Hexadecimal",
+      "length": "Longitud",
+      "lengthTooltip": "Número de bytes a recuperar, en decimal o hexadecimal",
+      "memory": {
+        "addressField": {
+          "memoryReadError": "Introduzca una dirección o expresión en el campo Ubicación."
+        },
+        "freeze": "Congelar la vista de la memoria",
+        "hideSettings": "Ocultar el panel de configuración",
+        "readError": {
+          "bounds": "Límites de memoria excedidos, el resultado será truncado.",
+          "noContents": "No hay contenidos de memoria disponibles actualmente."
+        },
+        "readLength": {
+          "memoryReadError": "Introduzca una longitud (número decimal o hexadecimal) en el campo Longitud."
+        },
+        "showSettings": "Mostrar el panel de configuración",
+        "unfreeze": "Descongelar la vista de la memoria",
+        "userError": "Hubo un error en la obtención de la memoria."
+      },
+      "memoryCategory": "Inspector de memoria",
+      "memoryInspector": "Inspector de memoria",
+      "memoryTitle": "Memoria",
+      "octal": "Octal",
+      "offset": "Offset",
+      "offsetTooltip": "Desplazamiento que se añade a la posición de memoria actual, cuando se navega",
+      "provider": {
+        "localsError": "No se pueden leer las variables locales. No hay sesión de depuración activa.",
+        "readError": "No se puede leer la memoria. No hay sesión de depuración activa.",
+        "writeError": "No se puede escribir en la memoria. No hay sesión de depuración activa."
+      },
+      "register": "Registro",
+      "register-widget": {
+        "filter-placeholder": "Filtro (comienza con)"
+      },
+      "registerReadError": "Hubo un error en la obtención de registros.",
+      "registers": "Registros",
+      "toggleComparisonWidgetVisibility": "Alternar la visibilidad del widget de comparación",
+      "utils": {
+        "afterBytes": "Debes cargar memoria en los dos widgets que quieras comparar. {0} no tiene memoria cargada.",
+        "bytesMessage": "Debes cargar memoria en los dos widgets que quieras comparar. {0} no tiene memoria cargada."
+      }
+    },
+    "messages": {
+      "notificationTimeout": "Las notificaciones informativas se ocultarán después de este tiempo de espera.",
+      "toggleNotifications": "Alternar las notificaciones"
+    },
+    "mini-browser": {
+      "typeUrl": "Escriba una URL"
+    },
+    "monaco": {
+      "noSymbolsMatching": "No hay símbolos que coincidan",
+      "typeToSearchForSymbols": "Escriba para buscar símbolos"
+    },
+    "navigator": {
+      "autoReveal": "Auto Reveal",
+      "clipboardWarn": "El acceso al portapapeles está denegado. Comprueba los permisos de tu navegador.",
+      "clipboardWarnFirefox": "La API del portapapeles no está disponible. Se puede activar mediante la preferencia '{0}' en la página '{1}'. A continuación, vuelva a cargar Theia. Tenga en cuenta que esto permitirá a FireFox tener acceso completo al portapapeles del sistema.",
+      "openWithSystemEditor": "Abrir con el editor del sistema",
+      "refresh": "Actualizar en el Explorador",
+      "reveal": "Revelar en el Explorador",
+      "systemEditor": "Editor del sistema",
+      "toggleHiddenFiles": "Activar los archivos ocultos"
+    },
+    "output": {
+      "clearOutputChannel": "Canal de salida claro...",
+      "closeOutputChannel": "Cerrar canal de salida...",
+      "hiddenChannels": "Canales ocultos",
+      "hideOutputChannel": "Ocultar canal de salida...",
+      "maxChannelHistory": "El número máximo de entradas en un canal de salida.",
+      "outputChannels": "Canales de salida",
+      "showOutputChannel": "Mostrar canal de salida..."
+    },
+    "plugin": {
+      "blockNewTab": "Su navegador ha impedido la apertura de una nueva pestaña"
+    },
+    "plugin-dev": {
+      "alreadyRunning": "La instancia alojada ya está funcionando.",
+      "debugInstance": "Instancia de depuración",
+      "debugMode": "Uso de inspect o inspect-brk para la depuración de Node.js",
+      "debugPorts": {
+        "debugPort": "Puerto a usar para la depuración Node.js de este servidor"
+      },
+      "devHost": "Anfitrión del desarrollo",
+      "failed": "Fallo en la ejecución de la instancia del plugin alojado: {0}",
+      "hostedPlugin": "Plugin alojado",
+      "hostedPluginRunning": "Plugin alojado: en funcionamiento",
+      "hostedPluginStarting": "Plugin alojado: Inicio",
+      "hostedPluginStopped": "Plugin alojado: Detenido",
+      "hostedPluginWatching": "Plugin alojado: Ver",
+      "instanceTerminated": "{0} se ha terminado",
+      "launchOutFiles": "Conjunto de patrones glob para localizar los archivos JavaScript generados (`${pluginPath}` se sustituirá por la ruta real del plugin).",
+      "noValidPlugin": "La carpeta especificada no contiene un plugin válido.",
+      "notRunning": "La instancia alojada no se está ejecutando.",
+      "pluginFolder": "La carpeta de plugins está configurada en: {0}",
+      "preventedNewTab": "Su navegador ha impedido la apertura de una nueva pestaña",
+      "restartInstance": "Reiniciar la instancia",
+      "running": "La instancia alojada está funcionando en:",
+      "selectPath": "Seleccione la ruta",
+      "startInstance": "Instancia de inicio",
+      "starting": "Iniciando el servidor de instancia alojada ...",
+      "stopInstance": "Detener la instancia",
+      "unknownTerminated": "La instancia ha sido terminada",
+      "watchMode": "Ejecutar el vigilante en el plugin en desarrollo"
+    },
+    "plugin-ext": {
+      "authentication-main": {
+        "loginTitle": "Inicio de sesión",
+        "signedOut": "Cierre de sesión correcto."
+      },
+      "plugins": "Plugins",
+      "webviewTrace": "Controla el rastreo de la comunicación con los webviews.",
+      "webviewWarnIfUnsecure": "Advierte a los usuarios de que las vistas web se despliegan actualmente de forma insegura."
+    },
+    "preferences": {
+      "ai-features": "Características de la IA",
+      "hostedPlugin": "Plugin alojado",
+      "toolbar": "Barra de herramientas"
+    },
+    "preview": {
+      "openByDefault": "Abrir la vista previa en lugar del editor por defecto."
+    },
+    "property-view": {
+      "created": "Creado",
+      "directory": "Directorio",
+      "lastModified": "Última modificación",
+      "location": "Ubicación",
+      "noProperties": "No hay propiedades disponibles.",
+      "properties": "Propiedades",
+      "symbolicLink": "Enlace simbólico"
+    },
+    "remote": {
+      "dev-container": {
+        "connect": "Reabrir en contenedor",
+        "noDevcontainerFiles": "No se han encontrado archivos devcontainer.json en el área de trabajo. Asegúrese de que dispone de un directorio .devcontainer con un archivo devcontainer.json.",
+        "selectDevcontainer": "Seleccione un archivo devcontainer.json"
+      },
+      "ssh": {
+        "connect": "Conectar la ventana actual al host...",
+        "connectToConfigHost": "Conectar la ventana actual al host en el archivo de configuración...",
+        "enterHost": "Introduzca el nombre de host SSH",
+        "enterUser": "Introduzca el nombre de usuario SSH",
+        "failure": "No se ha podido abrir la conexión SSH con el remoto.",
+        "hostPlaceHolder": "Por ejemplo, hello@example.com",
+        "needsHost": "Introduzca un nombre de host.",
+        "needsUser": "Introduzca un nombre de usuario.",
+        "userPlaceHolder": "Por ejemplo, hola"
+      },
+      "sshNoConfigPath": "No se ha encontrado la ruta de configuración SSH.",
+      "wsl": {
+        "connectToWsl": "Conectarse a WSL",
+        "connectToWslUsingDistro": "Conectarse a WSL mediante Distro...",
+        "noWslDistroFound": "No se han encontrado distribuciones WSL. Por favor, instale primero una distribución WSL.",
+        "reopenInWsl": "Reabrir carpeta en WSL",
+        "selectWSLDistro": "Seleccione una distribución WSL"
+      }
+    },
+    "scm": {
+      "amend": "Modificar",
+      "amendHeadCommit": "Compromiso HEAD",
+      "amendLastCommit": "Modificar el último compromiso",
+      "changeRepository": "Cambiar el repositorio...",
+      "config.untrackedChanges": "Controla el comportamiento de los cambios no rastreados.",
+      "config.untrackedChanges.hidden": "oculto",
+      "config.untrackedChanges.mixed": "mixto",
+      "config.untrackedChanges.separate": "separar",
+      "dirtyDiff": {
+        "close": "Cerrar Cambiar Vista Peek"
+      },
+      "history": "Historia",
+      "mergeEditor": {
+        "resetConfirmationTitle": "¿Realmente desea restablecer el resultado de la fusión en este editor?"
+      },
+      "noRepositoryFound": "No se ha encontrado ningún repositorio",
+      "unamend": "Sin modificar",
+      "unamendCommit": "No modificar el compromiso"
+    },
+    "search-in-workspace": {
+      "includeIgnoredFiles": "Incluir archivos ignorados",
+      "noFolderSpecified": "No ha abierto o especificado una carpeta. Actualmente sólo se buscan los archivos abiertos.",
+      "resultSubset": "Esto es sólo un subconjunto de todos los resultados. Utilice un término de búsqueda más específico para reducir la lista de resultados.",
+      "searchOnEditorModification": "Busca en el editor activo cuando se modifica."
+    },
+    "secondary-window": {
+      "extract-widget": "Mover la vista a la ventana secundaria"
+    },
+    "shell-area": {
+      "secondary": "Ventana secundaria"
+    },
+    "task": {
+      "attachTask": "Adjuntar tarea...",
+      "circularReferenceDetected": "Referencia circular detectada: {0} --&gt; {1}",
+      "clearHistory": "Historia clara",
+      "errorKillingTask": "Error al matar la tarea '{0}': {1}",
+      "errorLaunchingTask": "Error al iniciar la tarea '{0}': {1}",
+      "invalidTaskConfigs": "Se han encontrado configuraciones de tareas no válidas. Abra tasks.json y busque los detalles en la vista Problemas.",
+      "neverScanTaskOutput": "Nunca escanee la salida de la tarea",
+      "noTaskToRun": "No se ha encontrado ninguna tarea que ejecutar. Configurar tareas...",
+      "noTasksFound": "No se han encontrado tareas",
+      "notEnoughDataInDependsOn": "La información proporcionada en \"dependeDe\" no es suficiente para acertar con la tarea correcta.",
+      "schema": {
+        "commandOptions": {
+          "cwd": "El directorio de trabajo actual del programa o script ejecutado. Si se omite se utiliza la raíz del espacio de trabajo actual de Theia."
+        },
+        "presentation": {
+          "panel": {
+            "dedicated": "El terminal se dedica a una tarea específica. Si esa tarea se ejecuta de nuevo, el terminal se reutiliza. Sin embargo, la salida de una tarea diferente se presenta en un terminal distinto.",
+            "new": "Cada ejecución de esa tarea utiliza un nuevo terminal limpio.",
+            "shared": "El terminal se comparte y la salida de otras ejecuciones de tareas se añade al mismo terminal."
+          },
+          "showReuseMessage": "Controla si se muestra el mensaje \"El terminal será reutilizado por las tareas\"."
+        },
+        "problemMatcherObject": {
+          "owner": "El propietario del problema dentro de Theia. Puede omitirse si se especifica la base. Por defecto es 'externo' si se omite y no se especifica la base."
+        }
+      },
+      "taskAlreadyRunningInTerminal": "La tarea ya se está ejecutando en el terminal",
+      "taskExitedWithCode": "La tarea '{0}' ha finalizado con el código {1}.",
+      "taskTerminalTitle": "Tarea: {0}",
+      "taskTerminatedBySignal": "La tarea '{0}' fue terminada por la señal {1}.",
+      "terminalWillBeReusedByTasks": "El terminal será reutilizado por las tareas."
+    },
+    "terminal": {
+      "defaultProfile": "El perfil por defecto utilizado en {0}",
+      "enableCopy": "Activar ctrl-c (cmd-c en macOS) para copiar el texto seleccionado",
+      "enablePaste": "Activar ctrl-v (cmd-v en macOS) para pegar desde el portapapeles",
+      "profileArgs": "Los argumentos de shell que utiliza este perfil.",
+      "profileColor": "Un ID de color del tema del terminal para asociar con el terminal.",
+      "profileDefault": "Elija Perfil predeterminado...",
+      "profileIcon": "Un ID de codicon para asociar con el icono de terminal.\nterminal-tmux:\"$(terminal-tmux)\"",
+      "profileNew": "Nuevo Terminal (Con Perfil)...",
+      "profilePath": "La ruta del shell que utiliza este perfil.",
+      "profiles": "Los perfiles a presentar cuando se crea un nuevo terminal. Establezca la propiedad path manualmente con argumentos opcionales.\nEstablezca un perfil existente como `null` para ocultar el perfil de la lista, por ejemplo: `\"{0}\": null`.",
+      "rendererType": "Controla cómo se representa el terminal.",
+      "rendererTypeDeprecationMessage": "El tipo de renderizador ya no se admite como opción.",
+      "selectProfile": "Seleccione un perfil para el nuevo terminal",
+      "shell.deprecated": "Esto está obsoleto, la nueva forma recomendada de configurar tu shell por defecto es creando un perfil de terminal en 'terminal.integrated.profiles.{0}' y estableciendo su nombre de perfil como el predeterminado en 'terminal.integrated.defaultProfile.{0}.'",
+      "shellArgsLinux": "Los argumentos de la línea de comandos a utilizar cuando en el terminal de Linux.",
+      "shellArgsOsx": "Los argumentos de la línea de comandos a utilizar cuando en el terminal de macOS.",
+      "shellArgsWindows": "Los argumentos de la línea de comandos a utilizar cuando en el terminal de Windows.",
+      "shellLinux": "La ruta del shell que utiliza la terminal en Linux (por defecto: '{0}'}).",
+      "shellOsx": "La ruta del shell que utiliza el terminal en macOS (por defecto: '{0}'}).",
+      "shellWindows": "La ruta del shell que utiliza la terminal en Windows. (por defecto: '{0}')."
+    },
+    "terminal-manager": {
+      "addTerminalToGroup": "Añadir terminal al grupo",
+      "closeDialog": {
+        "message": "Una vez cerrado el Administrador de terminales, no se podrá restaurar su diseño. ¿Está seguro de que desea cerrar el Administrador de terminales?",
+        "title": "¿Desea cerrar el administrador de terminales?"
+      },
+      "closeTerminalManager": "Cerrar Terminal Manager",
+      "createNewTerminalGroup": "Crear nuevo grupo de terminales",
+      "createNewTerminalPage": "Crear nueva página de terminal",
+      "deleteGroup": "Eliminar grupo",
+      "deletePage": "Eliminar página",
+      "deleteTerminal": "Eliminar terminal",
+      "group": "Grupo",
+      "label": "Terminales",
+      "maximizeBottomPanel": "Maximizar el panel inferior",
+      "minimizeBottomPanel": "Minimizar el panel inferior",
+      "openTerminalManager": "Abrir el Administrador de terminales",
+      "page": "Página",
+      "rename": "Cambiar nombre",
+      "resetTerminalManagerLayout": "Restablecer diseño del administrador de terminales",
+      "toggleTreeView": "Alternar vista en árbol"
+    },
+    "test": {
+      "cancelAllTestRuns": "Cancelar todas las pruebas",
+      "stackFrameAt": "en",
+      "testRunDefaultName": "{0} ejecute {1}",
+      "testRuns": "Pruebas"
+    },
+    "toolbar": {
+      "addCommand": "Añadir comando a la barra de herramientas",
+      "addCommandPlaceholder": "Buscar un comando para añadir a la barra de herramientas",
+      "centerColumn": "Columna central",
+      "failedUpdate": "No se ha podido actualizar el valor de '{0}' en '{1}'.",
+      "filterIcons": "Iconos del filtro",
+      "iconSelectDialog": "Seleccione un icono para '{0}'",
+      "iconSet": "Conjunto de iconos",
+      "insertGroupLeft": "Insertar separador de grupos (izquierda)",
+      "insertGroupRight": "Insertar separador de grupos (derecha)",
+      "leftColumn": "Columna izquierda",
+      "openJSON": "Personalizar la barra de herramientas (abrir JSON)",
+      "removeCommand": "Eliminar el comando de la barra de herramientas",
+      "restoreDefaults": "Restaurar la barra de herramientas por defecto",
+      "rightColumn": "Columna derecha",
+      "selectIcon": "Seleccionar icono",
+      "toggleToolbar": "Barra de herramientas",
+      "toolbarLocationPlaceholder": "¿Dónde quiere que se añada el comando?",
+      "useDefaultIcon": "Utilizar el icono por defecto"
+    },
+    "typehierarchy": {
+      "subtypeHierarchy": "Jerarquía de subtipos",
+      "supertypeHierarchy": "Jerarquía de supertipos"
+    },
+    "variableResolver": {
+      "listAllVariables": "Variable: Listar todos"
+    },
+    "vsx-registry": {
+      "confirmDialogMessage": "La extensión \"{0}\" no está verificada y puede suponer un riesgo para la seguridad.",
+      "confirmDialogTitle": "¿Está seguro de que desea continuar con la instalación?",
+      "downloadCount": "Descargue el recuento: {0}",
+      "errorFetching": "Error en la búsqueda de extensiones.",
+      "errorFetchingConfigurationHint": "Esto podría deberse a problemas de configuración de la red.",
+      "failedInstallingVSIX": "Fallo en la instalación de {0} desde VSIX.",
+      "invalidVSIX": "El archivo seleccionado no es un plugin válido \"*.vsix\".",
+      "license": "License: {0}",
+      "onlyShowVerifiedExtensionsDescription": "Esto permite que {0} sólo muestre extensiones verificadas.",
+      "onlyShowVerifiedExtensionsTitle": "Mostrar sólo extensiones verificadas",
+      "recommendedExtensions": "Una lista de los nombres de las extensiones recomendadas para su uso en este espacio de trabajo.",
+      "searchPlaceholder": "Buscar extensiones en {0}",
+      "showInstalled": "Mostrar extensiones instaladas",
+      "showRecommendedExtensions": "Controla si se muestran las notificaciones de las recomendaciones de extensión.",
+      "vsx-extensions-contribution": {
+        "update-version-uninstall-error": "Error al eliminar la extensión: {0}.",
+        "update-version-version-error": "Fallo al instalar la versión {0} de {1}."
+      }
+    },
+    "webview": {
+      "goToReadme": "Ir al LÉAME",
+      "messageWarning": "            El patrón de host del punto final {0} se ha cambiado a `{1}`; el cambio de patrón puede dar lugar a vulnerabilidades de seguridad.             Consulte `{2}` para obtener más información."
+    },
+    "workspace": {
+      "bothAreDirectories": "Ambos recursos son directorios.",
+      "clickToManageTrust": "Haga clic para administrar la configuración de confianza.",
+      "compareWithEachOther": "Comparar con los demás",
+      "confirmDeletePermanently.description": "No se ha podido eliminar \"{0}\" con la papelera. Quieres eliminar permanentemente en su lugar?",
+      "confirmDeletePermanently.solution": "Puedes desactivar el uso de la papelera en las preferencias.",
+      "confirmDeletePermanently.title": "Error al borrar el archivo",
+      "confirmMessage.delete": "¿Realmente quiere eliminar los siguientes archivos?",
+      "confirmMessage.dirtyMultiple": "¿Realmente quieres borrar {0} archivos con cambios no guardados?",
+      "confirmMessage.dirtySingle": "¿Realmente quieres borrar {0} con los cambios no guardados?",
+      "confirmMessage.uriMultiple": "¿Realmente quieres borrar todos los {0} archivos seleccionados?",
+      "confirmMessage.uriSingle": "¿Realmente quieres borrar {0}?",
+      "directoriesCannotBeCompared": "Los directorios no se pueden comparar. {0}",
+      "duplicate": "Duplicado",
+      "failSaveAs": "No se puede ejecutar \"{0}\" para el widget actual.",
+      "isDirectory": "{0}'' es un directorio.",
+      "manageTrustPlaceholder": "Seleccionar estado de confianza para este espacio de trabajo",
+      "newFilePlaceholder": "Nombre del archivo",
+      "newFolderPlaceholder": "Nombre de la carpeta",
+      "noErasure": "Nota: No se borrará nada del disco",
+      "notWorkspaceFile": "Archivo de espacio de trabajo no válido: {0}",
+      "openRecentPlaceholder": "Escriba el nombre del espacio de trabajo que desea abrir",
+      "openRecentWorkspace": "Abrir el espacio de trabajo reciente...",
+      "preserveWindow": "Habilitar la apertura de espacios de trabajo en la ventana actual.",
+      "removeFolder": "¿Está seguro de que quiere eliminar la siguiente carpeta del espacio de trabajo?",
+      "removeFolders": "¿Está seguro de que quiere eliminar las siguientes carpetas del espacio de trabajo?",
+      "restrictedModeDescription": "Algunas funciones están desactivadas porque este espacio de trabajo no es de confianza.",
+      "restrictedModeNote": "*Nota: La función de confianza del espacio de trabajo se encuentra actualmente en desarrollo en Theia; aún no todas las funciones están integradas con la confianza del espacio de trabajo.*",
+      "schema": {
+        "folders": {
+          "description": "Carpetas raíz en el espacio de trabajo"
+        },
+        "title": "Archivo del espacio de trabajo"
+      },
+      "trashTitle": "Mover {0} a la Papelera",
+      "trustEmptyWindow": "Controla si el espacio de trabajo vacío es de confianza o no por defecto.",
+      "trustEnabled": "Controla si la confianza del espacio de trabajo está activada o no. Si se desactiva, todos los espacios de trabajo son de confianza.",
+      "trustTrustedFolders": "Lista de URI de carpetas que se consideran fiables sin necesidad de confirmación.",
+      "untitled-cleanup": "Parece que hay muchos archivos de espacio de trabajo sin título. Por favor, compruebe {0} y elimine los archivos no utilizados.",
+      "variables": {
+        "cwd": {
+          "description": "El directorio de trabajo actual del ejecutor de tareas al inicio"
+        },
+        "file": {
+          "description": "La ruta del archivo actualmente abierto"
+        },
+        "fileBasename": {
+          "description": "El nombre base del archivo actualmente abierto."
+        },
+        "fileBasenameNoExtension": {
+          "description": "El nombre del archivo actualmente abierto sin extensión."
+        },
+        "fileDirname": {
+          "description": "El nombre del directorio del archivo actualmente abierto."
+        },
+        "fileExtname": {
+          "description": "La extensión del archivo actualmente abierto"
+        },
+        "relativeFile": {
+          "description": "La ruta del archivo actualmente abierto con respecto a la raíz del espacio de trabajo."
+        },
+        "relativeFileDirname": {
+          "description": "El nombre del directorio del archivo abierto actualmente relativo a ${workspaceFolder}"
+        },
+        "workspaceFolder": {
+          "description": "La ruta de la carpeta raíz del espacio de trabajo"
+        },
+        "workspaceFolderBasename": {
+          "description": "El nombre de la carpeta raíz del espacio de trabajo."
+        },
+        "workspaceRoot": {
+          "description": "La ruta de la carpeta raíz del espacio de trabajo"
+        },
+        "workspaceRootFolderName": {
+          "description": "El nombre de la carpeta raíz del espacio de trabajo."
+        }
+      },
+      "workspaceFolderAdded": "Se ha creado un espacio de trabajo con múltiples raíces. Desea guardar la configuración del espacio de trabajo como un archivo?",
+      "workspaceFolderAddedTitle": "Carpeta añadida al espacio de trabajo"
+    }
+  },
+  "vsx.disabling": "Desactivación de",
+  "vsx.disabling.extensions": "Desactivando {0}...",
+  "vsx.enabling": "Habilitar",
+  "vsx.enabling.extension": "Enabling {0}..."
+}

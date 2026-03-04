@@ -1,0 +1,9 @@
+{
+  "registries": {
+    "public": "https://open-vsx.org/"
+  },
+  "use": [
+    "public"
+  ],
+  "rules": []
+}

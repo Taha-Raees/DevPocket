@@ -1,0 +1,31 @@
+{
+  "extends": "../../configs/base.tsconfig",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib",
+    "composite": true
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    {
+      "path": "../core"
+    },
+    {
+      "path": "../navigator"
+    },
+    {
+      "path": "../plugin-ext-vscode"
+    },
+    {
+      "path": "../scm"
+    },
+    {
+      "path": "../search-in-workspace"
+    },
+    {
+      "path": "../terminal"
+    }
+  ]
+}

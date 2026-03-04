@@ -1,0 +1,115 @@
+/* *****************************************************************************
+ * Copyright (C) 2026 EclipseSource GmbH and others.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License v. 2.0 which is available at
+ * http://www.eclipse.org/legal/epl-2.0.
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License v. 2.0 are satisfied: GNU General Public License, version 2
+ * with the GNU Classpath Exception which is available at
+ * https://www.gnu.org/software/classpath/license.html.
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0
+ * ***************************************************************************** */
+
+/* Fully collapse the top panel */
+body.theia-mobile-shell #theia-top-panel {
+  display: none !important;
+  min-height: 0 !important;
+  max-height: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+}
+
+body.theia-mobile-shell .p-MenuBar,
+body.theia-mobile-shell .theia-top-panel {
+  display: none !important;
+  min-height: 0 !important;
+  height: 0 !important;
+}
+
+/* Hide the right panel completely */
+body.theia-mobile-shell #theia-right-side-panel,
+body.theia-mobile-shell #theia-right-content-panel,
+body.theia-mobile-shell .theia-app-right,
+body.theia-mobile-shell .p-SplitPanel>.theia-app-sides.theia-app-right {
+  display: none !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  width: 0 !important;
+  flex: 0 0 0 !important;
+}
+
+/* Also target the right split panel handle */
+body.theia-mobile-shell .p-SplitPanel>.p-SplitPanel-handle+.theia-app-right,
+body.theia-mobile-shell .p-SplitPanel-handle:last-of-type {
+  display: none !important;
+  width: 0 !important;
+  min-width: 0 !important;
+}
+
+/* Slim status bar — no navigation items, just info */
+body.theia-mobile-shell #theia-statusBar {
+  min-height: 22px;
+  max-height: 22px;
+  font-size: 11px;
+  border-top: 1px solid var(--theia-sideBarSectionHeader-border);
+}
+
+/* Activity bar custom buttons (Files / Terminal) */
+body.theia-mobile-shell .mobile-activity-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 48px;
+  cursor: pointer;
+  color: var(--theia-activityBar-inactiveForeground, rgba(255, 255, 255, 0.4));
+  font-size: 22px;
+  transition: color 0.15s, background 0.15s;
+  border-left: 2px solid transparent;
+}
+
+body.theia-mobile-shell .mobile-activity-btn:hover {
+  color: var(--theia-activityBar-foreground, #fff);
+  background: var(--theia-toolbar-hoverBackground, rgba(255, 255, 255, 0.1));
+}
+
+body.theia-mobile-shell .mobile-activity-btn:active {
+  border-left-color: var(--theia-activityBar-activeBorder, var(--theia-focusBorder));
+  color: var(--theia-activityBar-foreground, #fff);
+}
+
+/* General touch-friendly sizes */
+body.theia-mobile-shell .p-TabBar-tab {
+  min-height: 38px;
+  padding-inline: 8px;
+}
+
+body.theia-mobile-shell .theia-tabBar-tab-row {
+  min-height: 40px;
+}
+
+body.theia-mobile-shell .theia-sidepanel-title {
+  min-height: 40px;
+}
+
+body.theia-mobile-shell .theia-input,
+body.theia-mobile-shell button,
+body.theia-mobile-shell .theia-button {
+  min-height: 36px;
+}
+
+body.theia-mobile-shell .p-SplitPanel-handle {
+  width: 8px;
+  height: 8px;
+}
+
+body.theia-mobile-shell .theia-app-main {
+  margin-bottom: 0;
+}

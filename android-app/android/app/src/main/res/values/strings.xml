@@ -1,0 +1,13 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">DevPocket</string>
+    <string name="title_activity_main">DevPocket</string>
+    <string name="package_name">com.theia.mobile</string>
+    <string name="custom_url_scheme">com.theia.mobile</string>
+    <string name="theia_backend_channel_name">Theia Backend</string>
+    <string name="theia_backend_channel_description">Runs the embedded Theia backend service</string>
+    <string name="theia_backend_notification_title">Theia backend is running</string>
+    <string name="theia_backend_notification_text">Serving IDE on localhost only</string>
+    <string name="loading_status">Starting Theia…</string>
+    <string name="loading_detail">Preparing local IDE process</string>
+</resources>

@@ -1,0 +1,72 @@
+{
+  "extends": "../../configs/base.tsconfig",
+  "include": [],
+  "compilerOptions": {
+    "composite": true
+  },
+  "references": [
+    {
+      "path": "../../dev-packages/cli"
+    },
+    {
+      "path": "../../dev-packages/native-webpack-plugin"
+    },
+    {
+      "path": "../../packages/core"
+    },
+    {
+      "path": "../../packages/debug"
+    },
+    {
+      "path": "../../packages/editor"
+    },
+    {
+      "path": "../../packages/filesystem"
+    },
+    {
+      "path": "../../packages/messages"
+    },
+    {
+      "path": "../../packages/mobile-shell"
+    },
+    {
+      "path": "../../packages/monaco"
+    },
+    {
+      "path": "../../packages/navigator"
+    },
+    {
+      "path": "../../packages/output"
+    },
+    {
+      "path": "../../packages/plugin-ext"
+    },
+    {
+      "path": "../../packages/plugin-ext-vscode"
+    },
+    {
+      "path": "../../packages/preferences"
+    },
+    {
+      "path": "../../packages/process"
+    },
+    {
+      "path": "../../packages/search-in-workspace"
+    },
+    {
+      "path": "../../packages/terminal"
+    },
+    {
+      "path": "../../packages/theia-command-console"
+    },
+    {
+      "path": "../../packages/userstorage"
+    },
+    {
+      "path": "../../packages/vsx-registry"
+    },
+    {
+      "path": "../../packages/workspace"
+    }
+  ]
+}
