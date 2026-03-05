@@ -17,6 +17,8 @@ import '@theia/core/shared/reflect-metadata';
 import { Container } from '@theia/core/shared/inversify';
 import { URI as VSCodeURI } from '@theia/core/shared/vscode-uri';
 import { MsgPackExtensionManager } from '@theia/core/lib/common/message-rpc/msg-pack-extension-manager';
+import * as cp from 'child_process';
+import * as os from 'os';
 import { ConnectionClosedError, MsgPackExtensionTag, RPCProtocol } from '../../common/rpc-protocol';
 import { ProcessTerminatedMessage, ProcessTerminateMessage } from './hosted-plugin-protocol';
 import { PluginHostRPC } from './plugin-host-rpc';
@@ -29,6 +31,147 @@ console.log('[android-lite][plugin-host] runtime diagnostics', {
     node: process.version,
     fetch: typeof globalThis.fetch,
     file: typeof (globalThis as unknown as { File?: unknown }).File
+});
+
+function resolveShellFallback(): string {
+    return process.env.THEIA_SHELL
+        || process.env.SHELL
+        || '/data/data/com.termux/files/usr/bin/bash';
+}
+
+function sanitizeShellPath(shell: string): string {
+    return shell;
+}
+
+function sanitizeCommandPath(command: string): string {
+    return command;
+}
+
+const originalUserInfo = os.userInfo.bind(os);
+(os as typeof os & { userInfo: typeof os.userInfo }).userInfo = ((options?: { encoding?: string }) => {
+    const info = originalUserInfo(options as never);
+    const shell = String(info.shell || '');
+    const sanitized = sanitizeShellPath(shell);
+    if (sanitized !== shell) {
+        return {
+            ...info,
+            shell: sanitized
+        };
+    }
+    return info;
+}) as typeof os.userInfo;
+
+function readUserInfoShell(): string {
+    try {
+        return os.userInfo().shell || '<empty>';
+    } catch (error) {
+        if (error instanceof Error) {
+            return `<error:${error.message}>`;
+        }
+        return '<error:unknown>';
+    }
+}
+
+process.env.SHELL = resolveShellFallback();
+if (!process.env.THEIA_SHELL) {
+    process.env.THEIA_SHELL = process.env.SHELL;
+}
+if (!process.env.npm_config_shell) {
+    process.env.npm_config_shell = process.env.SHELL;
+}
+if (!process.env.npm_config_script_shell) {
+    process.env.npm_config_script_shell = process.env.SHELL;
+}
+
+const originalSpawn = cp.spawn;
+const originalSpawnSync = cp.spawnSync;
+
+function patchSpawnOptions(options: cp.SpawnOptions = {}): cp.SpawnOptions {
+    const resolved = options;
+    if (typeof resolved.shell === 'string') {
+        resolved.shell = sanitizeShellPath(resolved.shell);
+    } else if (resolved.shell === true) {
+        resolved.shell = process.env.SHELL ?? '/system/bin/sh';
+    }
+    const env = {
+        ...process.env,
+        ...(resolved.env ?? {})
+    };
+    if (!env.SHELL) {
+        env.SHELL = process.env.SHELL ?? '/system/bin/sh';
+    }
+    if (!env.THEIA_SHELL) {
+        env.THEIA_SHELL = env.SHELL;
+    }
+    if (!env.npm_config_shell) {
+        env.npm_config_shell = env.SHELL;
+    }
+    if (!env.npm_config_script_shell) {
+        env.npm_config_script_shell = env.SHELL;
+    }
+    resolved.env = env;
+    return resolved;
+}
+
+function patchSpawnSyncOptions(options: cp.SpawnSyncOptions = {}): cp.SpawnSyncOptions {
+    const resolved = options;
+    if (typeof resolved.shell === 'string') {
+        resolved.shell = sanitizeShellPath(resolved.shell);
+    } else if (resolved.shell === true) {
+        resolved.shell = process.env.SHELL ?? '/system/bin/sh';
+    }
+    const env = {
+        ...process.env,
+        ...(resolved.env ?? {})
+    };
+    if (!env.SHELL) {
+        env.SHELL = process.env.SHELL ?? '/system/bin/sh';
+    }
+    if (!env.THEIA_SHELL) {
+        env.THEIA_SHELL = env.SHELL;
+    }
+    if (!env.npm_config_shell) {
+        env.npm_config_shell = env.SHELL;
+    }
+    if (!env.npm_config_script_shell) {
+        env.npm_config_script_shell = env.SHELL;
+    }
+    resolved.env = env;
+    return resolved;
+}
+
+(cp as { spawn: typeof cp.spawn }).spawn = ((
+    command: string,
+    argsOrOptions?: readonly string[] | cp.SpawnOptions,
+    maybeOptions?: cp.SpawnOptions
+) => {
+    const safeCommand = sanitizeCommandPath(command);
+    if (Array.isArray(argsOrOptions)) {
+        return originalSpawn(safeCommand, argsOrOptions as string[], patchSpawnOptions(maybeOptions));
+    }
+    return originalSpawn(safeCommand, [], patchSpawnOptions(argsOrOptions as cp.SpawnOptions));
+}) as typeof cp.spawn;
+
+(cp as { spawnSync: typeof cp.spawnSync }).spawnSync = ((
+    command: string,
+    argsOrOptions?: readonly string[] | cp.SpawnSyncOptions,
+    maybeOptions?: cp.SpawnSyncOptions
+) => {
+    const safeCommand = sanitizeCommandPath(command);
+    if (Array.isArray(argsOrOptions)) {
+        return originalSpawnSync(safeCommand, argsOrOptions as string[], patchSpawnSyncOptions(maybeOptions));
+    }
+    return originalSpawnSync(safeCommand, [], patchSpawnSyncOptions(argsOrOptions as cp.SpawnSyncOptions));
+}) as typeof cp.spawnSync;
+
+console.error('[android-lite][plugin-host] shell diagnostics', {
+    platform: process.platform,
+    processEnvShell: process.env.SHELL,
+    theiaShell: process.env.THEIA_SHELL,
+    theiaShellArgs: process.env.THEIA_SHELL_ARGS,
+    npmConfigShell: process.env.npm_config_shell,
+    npmConfigScriptShell: process.env.npm_config_script_shell,
+    userInfoShell: readUserInfoShell()
 });
 
 // override exit() function, to do not allow plugin kill this node

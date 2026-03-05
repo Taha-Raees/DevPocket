@@ -125,10 +125,15 @@ class TheiaBackendService : Service() {
             throw IOException("Missing backend entrypoint at ${entry.absolutePath}")
         }
 
+        val devPocketWorkspace = File("/storage/emulated/0/Documents/DevPocket")
+        if (!devPocketWorkspace.exists()) {
+            devPocketWorkspace.mkdirs()
+        }
+
         val command = mutableListOf(
             node.absolutePath,
             entry.absolutePath,
-            "/storage/emulated/0",
+            devPocketWorkspace.absolutePath,
             "--hostname", "127.0.0.1",
             "--port", port.toString(),
             "--plugins=local-dir:${TheiaRuntimePaths.extensionsRoot(this).absolutePath}"
@@ -149,7 +154,7 @@ class TheiaBackendService : Service() {
         val existingPath = env.getOrDefault("PATH", "")
         env["PATH"] = "$runtimeBin:$existingPath"
         env["LD_LIBRARY_PATH"] = runtimeLib
-        env["HOME"] = filesDir.absolutePath
+        env["HOME"] = devPocketWorkspace.absolutePath
         env["THEIA_DEFAULT_PLUGINS"] = "local-dir:${TheiaRuntimePaths.extensionsRoot(this).absolutePath}"
         env["THEIA_PLUGINS"] = "local-dir:${TheiaRuntimePaths.extensionsRoot(this).absolutePath}"
         env["THEIA_ANDROID_LITE"] = "1"
@@ -162,12 +167,22 @@ class TheiaBackendService : Service() {
         env["THEIA_APP_PROJECT_PATH"] = appProjectPath
         // Bypass Termux-hardcoded openssl.cnf permissions error
         env["OPENSSL_CONF"] = "/dev/null"
-        // Force node-pty to use the Termux bash instead of /bin/sh
+        // Force node-pty and execa children to use the Termux bash instead of /system/bin/sh
         val termuxBash = File(runtimeBin, "bash")
-        env["SHELL"] = if (termuxBash.exists()) termuxBash.absolutePath else "/system/bin/sh"
+        val termuxSh = File(runtimeBin, "sh")
+        val resolvedShell = if (termuxBash.exists()) termuxBash.absolutePath else if (termuxSh.exists()) termuxSh.absolutePath else "/system/bin/sh"
+        env["SHELL"] = resolvedShell
+        env["THEIA_SHELL"] = resolvedShell
+        env["npm_config_script_shell"] = resolvedShell
+        env["npm_config_shell"] = resolvedShell
         // Fix webview rendering: use same-origin pattern instead of subdomain-based
-        // (subdomain DNS resolution fails on 127.0.0.1 in Android WebView)
         env["THEIA_WEBVIEW_EXTERNAL_ENDPOINT"] = "{{hostname}}"
+        // Android strict inotify limits cause "Unable to watch for file changes"
+        // Force chokidar to use polling instead of native OS events
+        env["CHOKIDAR_USEPOLLING"] = "1"
+        env["CHOKIDAR_INTERVAL"] = "1000"
+        // Prevent "Cannot move to trash" errors since Android /storage/emulated/0 lacks a valid .Trash
+        env["THEIA_DISABLE_TRASH"] = "true"
 
         return builder
     }

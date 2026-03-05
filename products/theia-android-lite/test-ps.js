@@ -1,0 +1,1 @@
+const cp = require('child_process'); const { stdout } = cp.spawnSync('/data/user/0/com.theia.mobile/files/runtime/bin/ps', ['ax', '-o', 'ppid=,pid=']); console.log('STDOUT:', stdout.toString()); const psList = stdout.toString().trim().split('\n').map(l => l.match(/(\d+)\s+(\d+)/)); console.log(psList.slice(0, 5));

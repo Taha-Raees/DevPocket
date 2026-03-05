@@ -132,6 +132,9 @@ export class TerminalServiceMainImpl implements TerminalServiceMain, TerminalLin
             this.extProxy.$terminalOnInput(terminal.id, data);
             this.extProxy.$terminalOnInteraction(terminal.id);
         }));
+        this.toDispose.push(terminal.onOutput(data => {
+            this.extProxy.$terminalOnData(terminal.id, data);
+        }));
 
         this.toDispose.push(terminal.onShellTypeChanged(shellType => {
             this.extProxy.$terminalShellTypeChanged(terminal.id, shellType);

@@ -312,6 +312,7 @@ export interface TerminalServiceExt {
     $terminalOpened(id: string, processId: number, terminalId: number, cols: number, rows: number): void;
     $terminalClosed(id: string, exitStatus: theia.TerminalExitStatus | undefined): void;
     $terminalOnInput(id: string, data: string): void;
+    $terminalOnData(id: string, data: string): void;
     $terminalSizeChanged(id: string, cols: number, rows: number): void;
     $currentTerminalChanged(id: string | undefined): void;
     $terminalOnInteraction(id: string): void;

@@ -134,8 +134,11 @@ export class DiskFileSystemProvider implements Disposable,
                 FileSystemProviderCapabilities.FileReadStream |
                 FileSystemProviderCapabilities.FileFolderCopy |
                 FileSystemProviderCapabilities.Access |
-                FileSystemProviderCapabilities.Trash |
                 FileSystemProviderCapabilities.Update;
+
+            if (process.env.THEIA_DISABLE_TRASH !== 'true') {
+                this._capabilities |= FileSystemProviderCapabilities.Trash;
+            }
 
             if (OS.type() === OS.Type.Linux) {
                 this._capabilities |= FileSystemProviderCapabilities.PathCaseSensitive;
