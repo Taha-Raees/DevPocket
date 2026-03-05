@@ -3724,6 +3724,16 @@ export module '@theia/plugin' {
     }
 
     /**
+     * An event describing terminal output data written to a terminal.
+     */
+    export interface TerminalDataWriteEvent {
+        /** The terminal for which the data was written. */
+        readonly terminal: Terminal;
+        /** The data that was written. */
+        readonly data: string;
+    }
+
+    /**
      * Terminal exit reason kind.
      */
     export enum TerminalExitReason {
@@ -6009,6 +6019,11 @@ export module '@theia/plugin' {
          * either through the createTerminal API or commands.
          */
         export const onDidOpenTerminal: Event<Terminal>;
+
+        /**
+         * An event which fires when terminal output data is written (PTY output streamed to the plugin).
+         */
+        export const onDidWriteTerminalData: Event<TerminalDataWriteEvent>;
 
         /**
          * An {@link Event} which fires when a {@link Terminal.state terminal's state} has changed.

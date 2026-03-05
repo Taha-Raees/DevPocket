@@ -59,8 +59,8 @@ echo "[4/5] Building theia-android-lite product..."
 
 # Step 4b: Prepare runtime assets
 echo ""
-echo "[4b] Preparing runtime assets for Android..."
-(cd "${REPO_ROOT}/products/theia-android-lite" && npm run prepare:android-assets)
+echo "[4b] Preparing runtime assets for Android (aarch64)..."
+(cd "${REPO_ROOT}/products/theia-android-lite" && ANDROID_ARCH=aarch64 npm run prepare:android-assets)
 
 # Step 5: Build Android APK
 echo ""

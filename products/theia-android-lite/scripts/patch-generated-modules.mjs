@@ -11,6 +11,8 @@ const productRoot = path.resolve(__dirname, '..');
 const frontendIndexPath = path.resolve(productRoot, 'src-gen', 'frontend', 'index.js');
 const backendServerPath = path.resolve(productRoot, 'src-gen', 'backend', 'server.js');
 const backendWebpackPath = path.resolve(productRoot, 'gen-webpack.node.config.js');
+const androidPolyfillSrc = path.resolve(productRoot, 'scripts', 'android-polyfill.js');
+const androidPolyfillDest = path.resolve(productRoot, 'src-gen', 'backend', 'android-polyfill.js');
 
 // ─── IMPORTANT ──────────────────────────────────────────────
 // Do NOT block modules that plugin-ext depends on!
@@ -165,7 +167,13 @@ if (!frontendBefore || !backendBefore || !webpackBefore) {
 }
 
 const frontendAfter = preserveFrontendModules(stripFrontendModules(frontendBefore));
-const backendAfter = preserveBackendModules(stripBackendModules(backendBefore));
+let backendAfter = preserveBackendModules(stripBackendModules(backendBefore));
+if (!backendAfter.includes("require('./android-polyfill.js');")) {
+    backendAfter = "require('./android-polyfill.js');\n" + backendAfter;
+}
+if (fs.existsSync(androidPolyfillSrc)) {
+    fs.copyFileSync(androidPolyfillSrc, androidPolyfillDest);
+}
 const webpackAfter = webpackBefore;
 
 const hasTerminalFrontendModule = /@theia\/terminal\/lib\/browser\/terminal-frontend-module/.test(frontendAfter);

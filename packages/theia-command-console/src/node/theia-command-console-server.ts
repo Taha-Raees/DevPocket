@@ -72,6 +72,15 @@ export class TheiaCommandConsoleServer implements CommandConsoleServer {
         const env = await this.resolveEnv();
 
         const shell = await this.resolveShell();
+        console.info('[theia-command-console] execute diagnostics', {
+            command: request.command,
+            cwd,
+            shell,
+            envShell: env.SHELL,
+            envTheiaShell: env.THEIA_SHELL,
+            envTheiaShellArgs: env.THEIA_SHELL_ARGS,
+            pathHead: (env.PATH || '').split(path.delimiter).slice(0, 5)
+        });
         const child = spawn(shell, ['-lc', request.command], {
             cwd,
             env,
@@ -188,15 +197,46 @@ export class TheiaCommandConsoleServer implements CommandConsoleServer {
             ? ['/system/bin/sh', process.env.SHELL, '/bin/sh']
             : [process.env.SHELL, '/bin/bash', '/bin/sh'];
 
+        const diagnostics: Array<{ candidate: string; exists: boolean }> = [];
         for (const candidate of shellCandidates) {
-            if (candidate && await fs.pathExists(candidate)) {
+            if (!candidate) {
+                continue;
+            }
+            const exists = await fs.pathExists(candidate);
+            diagnostics.push({ candidate, exists });
+            if (exists) {
+                console.info('[theia-command-console] resolveShell diagnostics', {
+                    platform: process.platform,
+                    envShell: process.env.SHELL,
+                    theiaShell: process.env.THEIA_SHELL,
+                    theiaShellArgs: process.env.THEIA_SHELL_ARGS,
+                    selected: candidate,
+                    candidates: diagnostics
+                });
                 return candidate;
             }
         }
 
         if (os.platform() === 'win32') {
-            return process.env.ComSpec ?? 'cmd.exe';
+            const fallback = process.env.ComSpec ?? 'cmd.exe';
+            console.info('[theia-command-console] resolveShell diagnostics', {
+                platform: process.platform,
+                envShell: process.env.SHELL,
+                theiaShell: process.env.THEIA_SHELL,
+                theiaShellArgs: process.env.THEIA_SHELL_ARGS,
+                selected: fallback,
+                candidates: diagnostics
+            });
+            return fallback;
         }
+        console.info('[theia-command-console] resolveShell diagnostics', {
+            platform: process.platform,
+            envShell: process.env.SHELL,
+            theiaShell: process.env.THEIA_SHELL,
+            theiaShellArgs: process.env.THEIA_SHELL_ARGS,
+            selected: '/bin/sh',
+            candidates: diagnostics
+        });
         return '/bin/sh';
     }
 

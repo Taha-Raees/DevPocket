@@ -10,7 +10,8 @@ const productRoot = path.resolve(__dirname, '..');
 const repoRoot = path.resolve(productRoot, '..', '..');
 
 // Allow arch override via env: ANDROID_ARCH=x86_64 or ANDROID_ARCH=aarch64
-const arch = process.env.ANDROID_ARCH || 'x86_64';
+// Default to aarch64 since most tablets shipped since ~2019 are 64-bit ARM.
+const arch = process.env.ANDROID_ARCH || 'aarch64';
 console.log(`Preparing runtime assets for arch: ${arch}`);
 
 const runtimeOut = path.resolve(repoRoot, 'android-app', 'android', 'app', 'src', 'main', 'assets', 'runtime');
@@ -121,6 +122,30 @@ const productPkgJson = path.resolve(productRoot, 'package.json');
 const runtimeProjectRoot = path.resolve(runtimeOut, 'theia-android-lite');
 cpSync(productPkgJson, path.resolve(runtimeProjectRoot, 'package.json'));
 
+// Inject rg into node_modules so Kilocode extension can find it on Android
+if (existsSync(termuxRgPath)) {
+    const vscodeRgBinOut = path.resolve(runtimeProjectRoot, 'node_modules', '@vscode', 'ripgrep', 'bin');
+    mkdirSync(vscodeRgBinOut, { recursive: true });
+
+    // Copy the real binary as rg.bin
+    cpSync(termuxRgPath, path.resolve(vscodeRgBinOut, 'rg.bin'));
+
+    // Create a shell wrapper for rg that sets LD_LIBRARY_PATH
+    // This is required because Kilocode extension spawns rg without passing the Android library paths,
+    // causing libpcre2-8.so to be unfound and crashing the node process.
+    // NOTE: Android's dynamic linker strictly rejects relative .. segments in LD_LIBRARY_PATH,
+    // so we evaluate the exact absolute path of the lib folder using cd and pwd.
+    const rgWrapperContent = `#!/system/bin/sh
+DIR="$(cd "$(dirname "$0")" && pwd)"
+LIB_DIR="$(cd "$DIR/../../../../../lib" && pwd)"
+export LD_LIBRARY_PATH="$LIB_DIR:$LD_LIBRARY_PATH"
+exec "$DIR/rg.bin" "$@"
+`;
+    writeFileSync(path.resolve(vscodeRgBinOut, 'rg'), rgWrapperContent, { mode: 0o755 });
+
+    console.log(`Copied Termux rg and generated absolute wrapper in node_modules for Kilocode`);
+}
+
 cpSync(ovsxRouterSrc, path.resolve(configOut, 'ovsx-router-config.json'));
 
 // Copy Termux node binary and npm
@@ -130,12 +155,40 @@ if (existsSync(termuxBinDir)) {
 
     // Generate node-wrapper to circumvent Android 10+ stripping LD_LIBRARY_PATH
     // for binaries executed from the data directory.
-    const wrapperContent = `#!/system/bin/sh
+    const nodeWrapperContent = `#!/system/bin/sh
 export LD_LIBRARY_PATH=$(dirname $0)/../lib:$LD_LIBRARY_PATH
 exec $(dirname $0)/node "$@"
 `;
-    writeFileSync(path.resolve(binOut, 'node-wrapper'), wrapperContent, { mode: 0o755 });
+    writeFileSync(path.resolve(binOut, 'node-wrapper'), nodeWrapperContent, { mode: 0o755 });
     console.log(`Generated bin/node-wrapper script`);
+
+    // Create ps-wrapper (tree-kill uses ps -ax which Toybox doesn't understand, causing backend uncaught exceptions)
+    const psWrapperContent = `#!/system/bin/sh
+args=""
+for arg in "$@"; do
+  if [ "$arg" = "ax" ] || [ "$arg" = "-ax" ]; then
+    args="$args -A"
+  else
+    args="$args $arg"
+  fi
+done
+exec /system/bin/ps $args
+`;
+    writeFileSync(path.resolve(binOut, 'ps'), psWrapperContent, { mode: 0o755 });
+    console.log(`Generated bin/ps script to polyfill Toybox limitations`);
+
+    // Create sh wrapper to redirect Kilocode execa raw calls to Termux bash
+    const shWrapperContent = `#!/system/bin/sh
+DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ "$1" = "-c" ]; then
+    shift
+    exec "$DIR/bash" -c "$@"
+else
+    exec "$DIR/bash" "$@"
+fi
+`;
+    writeFileSync(path.resolve(binOut, 'sh'), shWrapperContent, { mode: 0o755 });
+    console.log(`Generated bin/sh script to redirect execa to bash`);
 } else {
     console.warn(`WARNING: Termux binary dir not found at ${termuxBinDir}`);
     console.warn('         Run: ./scripts/download-node-android.sh ' + arch);

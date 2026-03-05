@@ -1,3 +1,4 @@
+require('./android-polyfill.js');
 // @ts-check
 require('reflect-metadata');
 

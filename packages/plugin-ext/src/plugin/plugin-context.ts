@@ -455,7 +455,7 @@ export function createAPIFactory(
             }
         };
 
-        const { onDidChangeActiveTerminal, onDidChangeTerminalState, onDidCloseTerminal, onDidOpenTerminal } = terminalExt;
+        const { onDidChangeActiveTerminal, onDidChangeTerminalState, onDidCloseTerminal, onDidOpenTerminal, onDidWriteTerminalData } = terminalExt;
         const showInformationMessage = messageRegistryExt.showMessage.bind(messageRegistryExt, MainMessageType.Info);
         const showWarningMessage = messageRegistryExt.showMessage.bind(messageRegistryExt, MainMessageType.Warning);
         const showErrorMessage = messageRegistryExt.showMessage.bind(messageRegistryExt, MainMessageType.Error);
@@ -474,6 +474,7 @@ export function createAPIFactory(
                 return terminalExt.terminals;
             },
             onDidChangeActiveTerminal,
+            onDidWriteTerminalData,
             onDidChangeActiveTextEditor(listener, thisArg?, disposables?) {
                 return editors.onDidChangeActiveTextEditor(listener, thisArg, disposables);
             },
