@@ -113,3 +113,162 @@ body.theia-mobile-shell .p-SplitPanel-handle {
 body.theia-mobile-shell .theia-app-main {
   margin-bottom: 0;
 }
+
+/* Hide the left activity/sidebar strip and let the content panel use the full width. */
+body.theia-mobile-shell #theia-left-content-panel .theia-app-sidebar-container {
+  display: none !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  flex: 0 0 0 !important;
+  overflow: hidden !important;
+}
+
+/* When a left sidebar widget is opened from the FAB, let it take the full view width. */
+body.theia-mobile-shell #theia-left-content-panel:not(.theia-mod-collapsed) {
+  left: 0 !important;
+  width: 100% !important;
+  min-width: 100% !important;
+  max-width: 100% !important;
+  z-index: 15 !important;
+}
+
+body.theia-mobile-shell #theia-left-content-panel:not(.theia-mod-collapsed)>.lm-BoxPanel-child:last-child,
+body.theia-mobile-shell #theia-left-content-panel:not(.theia-mod-collapsed) .theia-left-side-panel,
+body.theia-mobile-shell #theia-left-side-panel {
+  left: 0 !important;
+  width: 100% !important;
+  min-width: 100% !important;
+  max-width: 100% !important;
+}
+
+body.theia-mobile-shell #theia-left-content-panel:not(.theia-mod-collapsed) #theia-left-side-panel .lm-DockPanel-widget,
+body.theia-mobile-shell #theia-left-content-panel:not(.theia-mod-collapsed) #theia-left-side-panel .p-Widget,
+body.theia-mobile-shell #theia-left-content-panel:not(.theia-mod-collapsed) #theia-left-side-panel .lm-Widget {
+  width: 100% !important;
+}
+
+/* Fully collapse the left content area again when the active FAB item is pressed twice. */
+body.theia-mobile-shell #theia-left-content-panel.theia-mod-collapsed {
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  overflow: hidden !important;
+}
+
+body.theia-mobile-shell #theia-left-content-panel.theia-mod-collapsed>.lm-BoxPanel-child:last-child,
+body.theia-mobile-shell #theia-left-content-panel.theia-mod-collapsed .theia-left-side-panel,
+body.theia-mobile-shell #theia-left-content-panel.theia-mod-collapsed #theia-left-side-panel,
+body.theia-mobile-shell #theia-left-content-panel.theia-mod-collapsed .theia-sidepanel-toolbar {
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  overflow: hidden !important;
+}
+
+/* When the left panel is collapsed, shift the main editor/content area fully to the left. */
+body.theia-mobile-shell #theia-left-content-panel.theia-mod-collapsed+.lm-SplitPanel-handle {
+  left: 0 !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  display: none !important;
+}
+
+body.theia-mobile-shell #theia-left-content-panel.theia-mod-collapsed+.lm-SplitPanel-handle+#theia-main-content-panel {
+  left: 0 !important;
+  width: 100% !important;
+  min-width: 100% !important;
+  max-width: 100% !important;
+}
+
+body.theia-mobile-shell #theia-left-content-panel.theia-mod-collapsed~#theia-main-content-panel {
+  left: 0 !important;
+  width: 100% !important;
+  min-width: 100% !important;
+  max-width: 100% !important;
+}
+
+body.theia-mobile-shell #theia-left-content-panel.theia-mod-collapsed~#theia-bottom-split-panel {
+  left: 0 !important;
+  width: 100% !important;
+  min-width: 100% !important;
+  max-width: 100% !important;
+}
+
+body.theia-mobile-shell #theia-left-content-panel.theia-mod-collapsed~#theia-main-content-panel .theia-app-main,
+body.theia-mobile-shell #theia-left-content-panel.theia-mod-collapsed~#theia-main-content-panel .theia-app-centers,
+body.theia-mobile-shell #theia-left-content-panel.theia-mod-collapsed~#theia-main-content-panel .theia-editor {
+  left: 0 !important;
+  width: 100% !important;
+  min-width: 100% !important;
+  max-width: 100% !important;
+}
+
+body.theia-mobile-shell #theia-left-content-panel.theia-mod-collapsed~#theia-bottom-split-panel #theia-main-content-panel,
+body.theia-mobile-shell #theia-left-content-panel.theia-mod-collapsed~#theia-bottom-split-panel .theia-app-main,
+body.theia-mobile-shell #theia-left-content-panel.theia-mod-collapsed~#theia-bottom-split-panel .theia-app-centers,
+body.theia-mobile-shell #theia-left-content-panel.theia-mod-collapsed~#theia-bottom-split-panel .theia-editor {
+  left: 0 !important;
+  width: 100% !important;
+  min-width: 100% !important;
+  max-width: 100% !important;
+}
+
+body.theia-mobile-shell #theia-left-content-panel.theia-mod-collapsed~#theia-bottom-split-panel .theia-editor .monaco-editor,
+body.theia-mobile-shell #theia-left-content-panel.theia-mod-collapsed~#theia-bottom-split-panel .theia-editor .overflow-guard {
+  left: 0 !important;
+  width: 100% !important;
+  min-width: 100% !important;
+  max-width: 100% !important;
+}
+
+body.theia-mobile-shell #theia-left-content-panel.theia-mod-collapsed~#theia-bottom-split-panel .theia-editor .monaco-scrollable-element.editor-scrollable {
+  left: 44px !important;
+  width: calc(100% - 44px) !important;
+  min-width: calc(100% - 44px) !important;
+  max-width: calc(100% - 44px) !important;
+}
+
+/* Hide Monaco minimap/shadow in mobile full-width editor mode to remove the stray left divider line. */
+body.theia-mobile-shell .theia-editor .minimap,
+body.theia-mobile-shell .theia-editor .minimap-shadow-visible,
+body.theia-mobile-shell .theia-editor .minimap-slider,
+body.theia-mobile-shell .theia-editor .minimap-slider-horizontal,
+body.theia-mobile-shell .theia-editor .minimap-decorations-layer {
+  display: none !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+}
+
+/* Tighten the Monaco gutter on mobile so there is no large blank strip/divider at the left. */
+body.theia-mobile-shell .theia-editor .glyph-margin {
+  display: none !important;
+  width: 0 !important;
+}
+
+body.theia-mobile-shell .theia-editor .margin,
+body.theia-mobile-shell .theia-editor .margin-view-overlays {
+  width: 44px !important;
+}
+
+body.theia-mobile-shell .theia-editor .line-numbers {
+  left: 0 !important;
+  width: 44px !important;
+  text-align: center !important;
+  z-index: 2 !important;
+}
+
+body.theia-mobile-shell .theia-editor .monaco-scrollable-element.editor-scrollable {
+  left: 44px !important;
+  width: calc(100% - 44px) !important;
+}
+
+/* Monaco draws a left-edge indent guide on JSON files via box-shadowed core guides.
+   On the mobile layout this reads like a stray divider line, so suppress editor guides. */
+body.theia-mobile-shell .theia-editor .core-guide,
+body.theia-mobile-shell .theia-editor .indent-guide,
+body.theia-mobile-shell .theia-editor .bracket-indent-guide {
+  box-shadow: none !important;
+  border-left: none !important;
+}

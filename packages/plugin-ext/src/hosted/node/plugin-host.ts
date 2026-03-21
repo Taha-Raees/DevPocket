@@ -25,6 +25,12 @@ import { PluginHostRPC } from './plugin-host-rpc';
 import pluginHostModule from './plugin-host-module';
 import { URI } from '../../plugin/types-impl';
 
+const { File: NodeFile } = require('node:buffer') as typeof import('node:buffer');
+
+if (typeof (globalThis as unknown as { File?: unknown }).File === 'undefined' && typeof NodeFile !== 'undefined') {
+    (globalThis as unknown as { File?: typeof NodeFile }).File = NodeFile;
+}
+
 console.log('PLUGIN_HOST(' + process.pid + ') starting instance');
 
 console.log('[android-lite][plugin-host] runtime diagnostics', {

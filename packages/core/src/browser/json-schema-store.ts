@@ -133,7 +133,7 @@ export class DefaultJsonSchemaContribution implements JsonSchemaContribution {
     ];
 
     async registerSchemas(context: JsonSchemaRegisterContext): Promise<void> {
-        const catalog = require('./catalog.json') as { schemas: DefaultJsonSchemaContribution.SchemaData[] };
+        const catalog = require('../../src/browser/catalog.json') as { schemas: DefaultJsonSchemaContribution.SchemaData[] };
         for (const s of catalog.schemas) {
             if (s.fileMatch && this.shouldRegisterSchema(s)) {
                 context.registerSchema({

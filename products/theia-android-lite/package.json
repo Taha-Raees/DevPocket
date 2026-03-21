@@ -46,6 +46,7 @@
   },
   "scripts": {
     "clean": "theiaext clean",
+    "dev": "concurrently --kill-others -n server,watch -c cyan,yellow \"npm run -s start:debug\" \"npm run -s watch\"",
     "generate": "theiaext build && node ./scripts/patch-generated-modules.mjs",
     "build": "npm run -s generate && npm run -s bundle",
     "build:production": "npm run -s generate && npm run -s bundle:production",

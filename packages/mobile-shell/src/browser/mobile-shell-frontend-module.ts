@@ -19,7 +19,7 @@ import { CommandContribution } from '@theia/core';
 import { FrontendApplicationContribution } from '@theia/core/lib/browser';
 import { MobileShellContribution } from './mobile-shell-contribution';
 
-import './style/mobile-shell.css';
+import '../../src/browser/style/mobile-shell.css';
 
 export default new ContainerModule(bind => {
     bind(MobileShellContribution).toSelf().inSingletonScope();

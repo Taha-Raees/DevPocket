@@ -1,0 +1,116 @@
+/* *****************************************************************************
+ * Copyright (C) 2026 EclipseSource GmbH and others.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License v. 2.0 which is available at
+ * http://www.eclipse.org/legal/epl-2.0.
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License v. 2.0 are satisfied: GNU General Public License, version 2
+ * with the GNU Classpath Exception which is available at
+ * https://www.gnu.org/software/classpath/license.html.
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0
+ * ***************************************************************************** */
+
+body.theia-mobile-shell .theia-mobile-shell-fab-widget {
+    position: fixed;
+    right: 16px;
+    bottom: 30px;
+    width: 64px;
+    height: 64px;
+    z-index: 3000;
+    pointer-events: none;
+    overflow: visible !important;
+    background: transparent !important;
+}
+
+body.theia-mobile-shell .theia-mobile-fab-root {
+    position: relative;
+    width: 64px;
+    height: 64px;
+    pointer-events: none;
+    overflow: visible;
+}
+
+body.theia-mobile-shell .theia-mobile-fab-main,
+body.theia-mobile-shell .theia-mobile-fab-item {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    border: 1px solid var(--theia-activityBar-border, rgba(255, 255, 255, 0.14));
+    background: var(--theia-editorWidget-background, #1e1e1e);
+    color: var(--theia-activityBar-foreground, #fff);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+body.theia-mobile-shell .theia-mobile-fab-main {
+    width: 48px;
+    height: 48px;
+    z-index: 10;
+    padding: 0;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+}
+
+body.theia-mobile-shell .theia-mobile-fab-main-icon {
+    width: 42px;
+    height: 42px;
+    background-image: url('../../../../../assets/fav.svg');
+    background-repeat: no-repeat;
+    background-size: contain;
+    background-position: center;
+    filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.45));
+}
+
+body.theia-mobile-shell .theia-mobile-fab-item {
+    width: 44px;
+    height: 44px;
+    font-size: 20px;
+    opacity: 0;
+    transform: translate(0px, 0px);
+    transition: transform 200ms ease, opacity 150ms ease;
+    will-change: transform, opacity;
+}
+
+body.theia-mobile-shell .theia-mobile-fab-item-outer {
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+    border-style: dashed;
+}
+
+body.theia-mobile-shell .theia-mobile-fab-item i {
+    pointer-events: none;
+}
+
+body.theia-mobile-shell .theia-mobile-fab-item .theia-plugin-view-container {
+    display: inline-block;
+    width: 22px;
+    height: 22px;
+    min-width: 22px;
+    min-height: 22px;
+    background-color: currentColor !important;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+    -webkit-mask-size: contain !important;
+    mask-size: contain !important;
+}
+
+body.theia-mobile-shell .theia-mobile-fab-item-active {
+    border-color: var(--theia-focusBorder, #3794ff);
+    color: var(--theia-focusBorder, #3794ff);
+}
+
+body.theia-mobile-shell .theia-mobile-fab-root.theia-open .theia-mobile-fab-item {
+    opacity: 1;
+}

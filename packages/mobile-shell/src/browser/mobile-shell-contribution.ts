@@ -23,7 +23,10 @@ import {
     QuickInputService,
 } from '@theia/core/lib/browser';
 import { Command, CommandContribution, CommandRegistry, nls } from '@theia/core';
-import { DisposableCollection } from '@theia/core/lib/common/disposable';
+import { Disposable, DisposableCollection } from '@theia/core/lib/common/disposable';
+import { MessageLoop } from '@lumino/messaging';
+import { Widget } from '@lumino/widgets';
+import { MobileShellFabItem, MobileShellFabWidget } from './mobile-shell-fab-widget';
 
 const TERMINAL_TOGGLE_COMMAND_ID = 'workbench.action.terminal.toggleTerminal';
 
@@ -35,6 +38,10 @@ export namespace MobileShellCommands {
     export const SHOW_TERMINAL: Command = {
         id: 'mobile.showTerminal',
         label: nls.localizeByDefault('Mobile: Terminal')
+    };
+    export const OPEN_SETTINGS_MENU: Command = {
+        id: 'mobile.openSettingsMenu',
+        label: nls.localizeByDefault('Mobile: Settings Menu')
     };
 }
 
@@ -51,6 +58,8 @@ export class MobileShellContribution implements FrontendApplicationContribution,
 
     protected readonly toDispose = new DisposableCollection();
     protected commandRegistry: CommandRegistry | undefined;
+    protected fabWidget: MobileShellFabWidget | undefined;
+    protected readonly fabItems = new Map<string, MobileShellFabItem>();
 
     onStart(_app: FrontendApplication): void {
         this.shell.addClass('theia-mobile-shell');
@@ -66,6 +75,11 @@ export class MobileShellContribution implements FrontendApplicationContribution,
         this.hideRightPanel();
         this.removeOldStatusBarItems();
         this.addActivityBarButtons();
+
+        this.mountFloatingFab();
+        this.refreshFloatingFabItems();
+        this.watchFloatingFabSource();
+        this.collapseLeftPanelWhenMainWidgetIsActive();
     }
 
     protected hideTopPanel(): void {
@@ -173,7 +187,7 @@ export class MobileShellContribution implements FrontendApplicationContribution,
             filesBtn.className = 'theia-sidebar-menu-item mobile-activity-btn';
             filesBtn.title = 'File Actions';
             const filesIcon = document.createElement('i');
-            filesIcon.className = 'codicon codicon-files';
+            filesIcon.className = 'codicon codicon-folder-library';
             filesBtn.appendChild(filesIcon);
             filesBtn.addEventListener('click', (e) => {
                 e.preventDefault();
@@ -235,6 +249,232 @@ export class MobileShellContribution implements FrontendApplicationContribution,
         poll(15); // Try for 30 seconds
     }
 
+    protected mountFloatingFab(): void {
+        if (this.fabWidget) {
+            return;
+        }
+
+        const widget = new MobileShellFabWidget({
+            onDidRequestItemActivation: item => {
+                if (this.commandRegistry?.getCommand(item.id)) {
+                    void this.commandRegistry.executeCommand(item.id);
+                    return;
+                }
+                if (item.active) {
+                    void this.shell.collapsePanel('left');
+                    return;
+                }
+                void this.shell.activateWidget(item.id);
+            }
+        });
+
+        this.fabWidget = widget;
+        Widget.attach(widget, document.body);
+
+        this.toDispose.push(Disposable.create(() => {
+            if (widget.isAttached) {
+                Widget.detach(widget);
+            }
+            widget.dispose();
+            this.fabWidget = undefined;
+        }));
+    }
+
+    protected watchFloatingFabSource(): void {
+        const leftPanelHandler = this.shell.leftPanelHandler;
+        if (!leftPanelHandler) {
+            return;
+        }
+
+        const refresh = () => this.refreshFloatingFabItems();
+
+        leftPanelHandler.tabBar.tabAdded.connect(refresh, this);
+        leftPanelHandler.tabBar.currentChanged.connect(refresh, this);
+        leftPanelHandler.dockPanel.widgetAdded.connect(refresh, this);
+        leftPanelHandler.dockPanel.widgetRemoved.connect(refresh, this);
+
+        const refreshInterval = window.setInterval(refresh, 2000);
+
+        this.toDispose.push(Disposable.create(() => {
+            leftPanelHandler.tabBar.tabAdded.disconnect(refresh, this);
+            leftPanelHandler.tabBar.currentChanged.disconnect(refresh, this);
+            leftPanelHandler.dockPanel.widgetAdded.disconnect(refresh, this);
+            leftPanelHandler.dockPanel.widgetRemoved.disconnect(refresh, this);
+            window.clearInterval(refreshInterval);
+        }));
+    }
+
+    protected collapseLeftPanelWhenMainWidgetIsActive(): void {
+        const collapseIfNeeded = (): void => {
+            const activeWidget = this.shell.activeWidget;
+            if (!activeWidget) {
+                return;
+            }
+            if (this.shell.getAreaFor(activeWidget) === 'main' && this.shell.isExpanded('left')) {
+                void this.shell.collapsePanel('left').then(() => this.scheduleViewportRelayout());
+                return;
+            }
+            if (this.shell.getAreaFor(activeWidget) === 'main') {
+                this.scheduleViewportRelayout();
+            }
+        };
+
+        this.shell.onDidChangeActiveWidget(() => {
+            collapseIfNeeded();
+            this.refreshFloatingFabItems();
+        });
+
+        this.shell.mainPanel.widgetAdded.connect(() => this.scheduleViewportRelayout(), this);
+        this.shell.mainPanel.widgetActivated.connect(() => this.scheduleViewportRelayout(), this);
+
+        this.toDispose.push(Disposable.create(() => {
+            this.shell.mainPanel.widgetAdded.disconnect(() => this.scheduleViewportRelayout(), this);
+            this.shell.mainPanel.widgetActivated.disconnect(() => this.scheduleViewportRelayout(), this);
+        }));
+    }
+
+    protected scheduleViewportRelayout(): void {
+        const dispatch = () => window.dispatchEvent(new Event('resize'));
+        const refreshEditors = () => this.refreshVisibleEditors();
+        dispatch();
+        refreshEditors();
+        requestAnimationFrame(() => {
+            dispatch();
+            refreshEditors();
+        });
+        setTimeout(() => {
+            dispatch();
+            refreshEditors();
+        }, 50);
+        setTimeout(() => {
+            dispatch();
+            refreshEditors();
+        }, 150);
+        setTimeout(() => {
+            dispatch();
+            refreshEditors();
+        }, 300);
+    }
+
+    protected applyMobileEditorOptions(editor: {
+        getControl?: () => { updateOptions?: (options: object) => void };
+        updateOptions?: (options: object) => void;
+    }): void {
+        const mobileOptions = {
+            wordWrap: 'on',
+            wordWrapOverride2: 'on',
+            wrappingStrategy: 'advanced',
+            wrappingIndent: 'same',
+            lineNumbers: 'on',
+            lineNumbersMinChars: 2,
+            glyphMargin: false,
+            lineDecorationsWidth: 0,
+            overviewRulerLanes: 0,
+            minimap: {
+                enabled: false,
+            },
+            scrollBeyondLastColumn: 0,
+            scrollbar: {
+                horizontal: 'hidden',
+                horizontalScrollbarSize: 0,
+                useShadows: false,
+            },
+        };
+
+        editor.updateOptions?.(mobileOptions);
+        editor.getControl?.().updateOptions?.(mobileOptions);
+    }
+
+    protected refreshVisibleEditors(): void {
+        const refreshFrom = (widgets: Iterable<unknown>) => {
+            for (const candidate of widgets) {
+                const widget = candidate as {
+                    isVisible?: boolean;
+                    node?: HTMLElement;
+                    editor?: {
+                        refresh?: () => void;
+                        resizeToFit?: () => void;
+                        getControl?: () => {
+                            updateOptions?: (options: object) => void;
+                            layout?: (dimension?: { width: number; height: number }) => void;
+                        };
+                        updateOptions?: (options: object) => void;
+                    };
+                };
+                if (widget.node?.classList.contains('theia-editor')) {
+                    if (widget.editor) {
+                        this.applyMobileEditorOptions(widget.editor);
+                        const control = widget.editor.getControl?.();
+                        const width = Math.max(widget.node.clientWidth, Math.round(widget.node.getBoundingClientRect().width));
+                        const height = Math.max(widget.node.clientHeight, Math.round(widget.node.getBoundingClientRect().height));
+                        if (width > 0 && height > 0) {
+                            control?.layout?.({ width, height });
+                        }
+                    }
+                    widget.editor?.resizeToFit?.();
+                    widget.editor?.refresh?.();
+                    MessageLoop.sendMessage(widget as unknown as Widget, Widget.ResizeMessage.UnknownSize);
+                }
+            }
+        };
+
+        refreshFrom(this.shell.mainPanel.widgets());
+        refreshFrom(this.shell.bottomPanel.widgets());
+    }
+
+    protected refreshFloatingFabItems(): void {
+        const tabBar = this.shell.leftPanelHandler?.tabBar;
+        if (!tabBar || !this.fabWidget) {
+            return;
+        }
+
+        const currentWidgetId = tabBar.currentTitle?.owner.id;
+        this.fabItems.clear();
+
+        tabBar.titles.forEach((title, order) => {
+            const widget = title.owner;
+            if (!widget.id) {
+                return;
+            }
+
+            const label = (title.caption || title.label || widget.id).trim();
+            const iconClass = title.iconClass.trim() || 'codicon codicon-circle-large-filled';
+
+            this.fabItems.set(widget.id, {
+                id: widget.id,
+                label,
+                iconClass,
+                order,
+                active: widget.id === currentWidgetId,
+            });
+        });
+
+        const bottomFabItems: MobileShellFabItem[] = [
+            {
+                id: MobileShellCommands.SHOW_FILES.id,
+                label: 'File Actions',
+                iconClass: 'codicon codicon-folder-library',
+                order: 100,
+            },
+            {
+                id: MobileShellCommands.SHOW_TERMINAL.id,
+                label: 'Terminal',
+                iconClass: 'codicon codicon-terminal',
+                order: 101,
+            },
+            {
+                id: MobileShellCommands.OPEN_SETTINGS_MENU.id,
+                label: 'Manage',
+                iconClass: 'codicon codicon-settings-gear',
+                order: 102,
+            }
+        ];
+
+        bottomFabItems.forEach(item => this.fabItems.set(item.id, item));
+
+        this.fabWidget.setItems(this.fabItems.values());
+    }
+
     registerCommands(commands: CommandRegistry): void {
         this.commandRegistry = commands;
 
@@ -264,6 +504,18 @@ export class MobileShellContribution implements FrontendApplicationContribution,
             execute: async () => {
                 await this.executeIfAvailable(commands, TERMINAL_TOGGLE_COMMAND_ID);
                 this.shell.expandPanel('bottom');
+            }
+        });
+
+        commands.registerCommand(MobileShellCommands.OPEN_SETTINGS_MENU, {
+            execute: async () => {
+                const settingsItem = document.querySelector('#theia-left-content-panel .theia-sidebar-menu .codicon-settings-gear')
+                    ?.closest('.theia-sidebar-menu-item') as HTMLElement | null;
+                if (settingsItem) {
+                    settingsItem.click();
+                    return;
+                }
+                await this.executeIfAvailable(commands, 'settings.open');
             }
         });
     }
