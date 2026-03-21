@@ -47,7 +47,7 @@ export namespace MobileShellCommands {
         id: 'mobile.openSettingsMenu',
         label: nls.localizeByDefault('Mobile: Settings Menu')
     };
-} 
+}
 
 @injectable()
 export class MobileShellContribution implements FrontendApplicationContribution, CommandContribution {
@@ -65,6 +65,157 @@ export class MobileShellContribution implements FrontendApplicationContribution,
     protected fabWidget: MobileShellFabWidget | undefined;
     protected emptyStateWidget: MobileShellEmptyStateWidget | undefined;
     protected readonly fabItems = new Map<string, MobileShellFabItem>();
+
+    protected readonly fabViewportMargins = {
+        right: 16,
+        bottom: 30,
+        width: 64,
+        height: 64,
+    };
+
+    protected logFabState(reason: string): void {
+        const fabMain = document.querySelector('.theia-mobile-fab-main') as HTMLElement | null;
+        const fabWidget = document.querySelector('.theia-mobile-shell-fab-widget') as HTMLElement | null;
+        const activeWidget = this.shell.activeWidget;
+
+        const rectOf = (element: HTMLElement | null) => {
+            if (!element) {
+                return undefined;
+            }
+            const rect = element.getBoundingClientRect();
+            return {
+                left: rect.left,
+                top: rect.top,
+                right: rect.right,
+                bottom: rect.bottom,
+                width: rect.width,
+                height: rect.height,
+            };
+        };
+
+        const styleOf = (element: HTMLElement | null) => {
+            if (!element) {
+                return undefined;
+            }
+            const style = window.getComputedStyle(element);
+            return {
+                display: style.display,
+                visibility: style.visibility,
+                opacity: style.opacity,
+                zIndex: style.zIndex,
+                pointerEvents: style.pointerEvents,
+                right: style.right,
+                bottom: style.bottom,
+            };
+        };
+
+        console.info('[mobile-shell][fab]', {
+            reason,
+            viewport: {
+                innerWidth: window.innerWidth,
+                innerHeight: window.innerHeight,
+                outerWidth: window.outerWidth,
+                outerHeight: window.outerHeight,
+            },
+            visualViewport: window.visualViewport ? {
+                width: window.visualViewport.width,
+                height: window.visualViewport.height,
+                offsetLeft: window.visualViewport.offsetLeft,
+                offsetTop: window.visualViewport.offsetTop,
+                pageLeft: window.visualViewport.pageLeft,
+                pageTop: window.visualViewport.pageTop,
+                scale: window.visualViewport.scale,
+            } : undefined,
+            activeWidgetId: activeWidget?.id,
+            activeWidgetArea: activeWidget ? this.shell.getAreaFor(activeWidget) : undefined,
+            fabWidgetRect: rectOf(fabWidget),
+            fabWidgetStyle: styleOf(fabWidget),
+            fabMainRect: rectOf(fabMain),
+            fabMainStyle: styleOf(fabMain),
+        });
+    }
+
+    protected updateFabViewportPosition(reason: string): void {
+        const node = this.fabWidget?.node;
+        if (!node) {
+            return;
+        }
+
+        const visualViewport = window.visualViewport;
+        const viewportWidth = visualViewport?.width ?? window.innerWidth;
+        const viewportHeight = visualViewport?.height ?? window.innerHeight;
+        const offsetLeft = visualViewport?.offsetLeft ?? 0;
+        const offsetTop = visualViewport?.offsetTop ?? 0;
+
+        const left = Math.max(0, Math.round(offsetLeft + viewportWidth - this.fabViewportMargins.width - this.fabViewportMargins.right));
+        const top = Math.max(0, Math.round(offsetTop + viewportHeight - this.fabViewportMargins.height - this.fabViewportMargins.bottom));
+
+        node.style.left = `${left}px`;
+        node.style.top = `${top}px`;
+        node.style.right = 'auto';
+        node.style.bottom = 'auto';
+
+        this.updateNotificationViewportPosition(reason);
+        this.logFabState(`updateFabViewportPosition:${reason}`);
+    }
+
+    protected updateNotificationViewportPosition(reason: string): void {
+        const overlay = document.querySelector('.theia-notifications-overlay') as HTMLElement | null;
+        const container = document.querySelector('.theia-notifications-container.theia-notification-toasts') as HTMLElement | null;
+        if (!container) {
+            return;
+        }
+
+        const visualViewport = window.visualViewport;
+        const viewportWidth = visualViewport?.width ?? window.innerWidth;
+        const viewportHeight = visualViewport?.height ?? window.innerHeight;
+        const offsetLeft = visualViewport?.offsetLeft ?? 0;
+        const offsetTop = visualViewport?.offsetTop ?? 0;
+        const viewportBottomInset = Math.max(0, Math.round(window.innerHeight - (offsetTop + viewportHeight)));
+        const bottom = viewportBottomInset + this.fabViewportMargins.height + this.fabViewportMargins.bottom + 12;
+        const width = Math.max(240, Math.round(Math.min(400, viewportWidth - 32)));
+        const left = Math.max(0, Math.round(offsetLeft + viewportWidth - width - 16));
+
+        if (overlay) {
+            overlay.style.position = 'fixed';
+            overlay.style.left = '0';
+            overlay.style.top = '0';
+            overlay.style.right = '0';
+            overlay.style.bottom = '0';
+            overlay.style.height = 'auto';
+            overlay.style.zIndex = '3100';
+            overlay.style.pointerEvents = 'none';
+        }
+
+        container.style.position = 'fixed';
+        container.style.left = `${left}px`;
+        container.style.right = 'auto';
+        container.style.top = 'auto';
+        container.style.bottom = `${bottom}px`;
+        container.style.width = `${width}px`;
+        container.style.maxWidth = `${width}px`;
+        container.style.zIndex = '3101';
+        container.style.pointerEvents = 'auto';
+
+        console.info('[mobile-shell][notifications]', {
+            reason,
+            viewport: {
+                innerWidth: window.innerWidth,
+                innerHeight: window.innerHeight,
+                visualWidth: visualViewport?.width,
+                visualHeight: visualViewport?.height,
+            },
+            notificationRect: container.getBoundingClientRect(),
+            fabBottom: this.fabWidget?.node.getBoundingClientRect().bottom,
+        });
+    }
+
+    protected watchNotificationViewportPosition(): void {
+        const refresh = () => this.updateNotificationViewportPosition('mutation');
+        const observer = new MutationObserver(refresh);
+        observer.observe(document.body, { childList: true, subtree: true });
+        this.toDispose.push(Disposable.create(() => observer.disconnect()));
+    }
 
     onStart(_app: FrontendApplication): void {
         this.shell.addClass('theia-mobile-shell');
@@ -85,8 +236,14 @@ export class MobileShellContribution implements FrontendApplicationContribution,
         this.mountEmptyState();
         this.refreshFloatingFabItems();
         this.refreshEmptyState();
+        this.logFabState('onStart');
         this.watchFloatingFabSource();
+        this.watchNotificationViewportPosition();
         this.collapseLeftPanelWhenMainWidgetIsActive();
+
+        window.addEventListener('resize', () => this.updateFabViewportPosition('window.resize'));
+        window.visualViewport?.addEventListener('resize', () => this.updateFabViewportPosition('visualViewport.resize'));
+        window.visualViewport?.addEventListener('scroll', () => this.updateFabViewportPosition('visualViewport.scroll'));
     }
 
     protected hideTopPanel(): void {
@@ -277,6 +434,7 @@ export class MobileShellContribution implements FrontendApplicationContribution,
 
         this.fabWidget = widget;
         Widget.attach(widget, document.body);
+        this.updateFabViewportPosition('mountFloatingFab');
 
         this.toDispose.push(Disposable.create(() => {
             if (widget.isAttached) {
@@ -385,6 +543,8 @@ export class MobileShellContribution implements FrontendApplicationContribution,
     protected scheduleViewportRelayout(): void {
         const dispatch = () => window.dispatchEvent(new Event('resize'));
         const refreshEditors = () => this.refreshVisibleEditors();
+        this.updateFabViewportPosition('scheduleViewportRelayout.start');
+        this.logFabState('scheduleViewportRelayout.start');
         dispatch();
         refreshEditors();
         requestAnimationFrame(() => {
@@ -522,6 +682,8 @@ export class MobileShellContribution implements FrontendApplicationContribution,
         bottomFabItems.forEach(item => this.fabItems.set(item.id, item));
 
         this.fabWidget.setItems(this.fabItems.values());
+        this.updateFabViewportPosition('refreshFloatingFabItems');
+        this.logFabState('refreshFloatingFabItems');
     }
 
     protected hasVisibleWorkbenchContent(): boolean {

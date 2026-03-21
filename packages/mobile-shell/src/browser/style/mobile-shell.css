@@ -374,3 +374,27 @@ body.theia-mobile-shell .theia-mobile-empty-state-action-description {
   font-size: 12px;
   color: var(--theia-descriptionForeground, rgba(255, 255, 255, 0.6));
 }
+
+body.theia-mobile-shell .theia-notifications-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  height: auto !important;
+  pointer-events: none !important;
+  z-index: 3100 !important;
+}
+
+body.theia-mobile-shell .theia-notifications-container.theia-notification-toasts {
+  position: fixed !important;
+  left: auto !important;
+  right: 16px !important;
+  top: auto !important;
+  bottom: 106px !important;
+  width: min(400px, calc(100vw - 32px)) !important;
+  max-width: calc(100vw - 32px) !important;
+  z-index: 3101 !important;
+  pointer-events: auto !important;
+}
+
+body.theia-mobile-shell .theia-notifications-container.theia-notification-toasts .theia-notification-list-scroll-container {
+  max-height: min(260px, calc(100vh - 180px)) !important;
+}
