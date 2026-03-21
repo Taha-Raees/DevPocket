@@ -26,9 +26,13 @@ import { Command, CommandContribution, CommandRegistry, nls } from '@theia/core'
 import { Disposable, DisposableCollection } from '@theia/core/lib/common/disposable';
 import { MessageLoop } from '@lumino/messaging';
 import { Widget } from '@lumino/widgets';
+import { MobileShellEmptyStateAction, MobileShellEmptyStateWidget } from './mobile-shell-empty-state-widget';
 import { MobileShellFabItem, MobileShellFabWidget } from './mobile-shell-fab-widget';
 
 const TERMINAL_TOGGLE_COMMAND_ID = 'workbench.action.terminal.toggleTerminal';
+const OPEN_FOLDER_COMMAND_ID = 'workspace:open';
+const OPEN_RECENT_COMMAND_IDS = ['workbench.action.openRecent', 'workspace:openRecent'];
+const SHOW_EXPLORER_COMMAND_ID = 'workbench.view.explorer';
 
 export namespace MobileShellCommands {
     export const SHOW_FILES: Command = {
@@ -43,7 +47,7 @@ export namespace MobileShellCommands {
         id: 'mobile.openSettingsMenu',
         label: nls.localizeByDefault('Mobile: Settings Menu')
     };
-}
+} 
 
 @injectable()
 export class MobileShellContribution implements FrontendApplicationContribution, CommandContribution {
@@ -59,6 +63,7 @@ export class MobileShellContribution implements FrontendApplicationContribution,
     protected readonly toDispose = new DisposableCollection();
     protected commandRegistry: CommandRegistry | undefined;
     protected fabWidget: MobileShellFabWidget | undefined;
+    protected emptyStateWidget: MobileShellEmptyStateWidget | undefined;
     protected readonly fabItems = new Map<string, MobileShellFabItem>();
 
     onStart(_app: FrontendApplication): void {
@@ -77,7 +82,9 @@ export class MobileShellContribution implements FrontendApplicationContribution,
         this.addActivityBarButtons();
 
         this.mountFloatingFab();
+        this.mountEmptyState();
         this.refreshFloatingFabItems();
+        this.refreshEmptyState();
         this.watchFloatingFabSource();
         this.collapseLeftPanelWhenMainWidgetIsActive();
     }
@@ -280,13 +287,39 @@ export class MobileShellContribution implements FrontendApplicationContribution,
         }));
     }
 
+    protected mountEmptyState(): void {
+        if (this.emptyStateWidget) {
+            return;
+        }
+
+        const widget = new MobileShellEmptyStateWidget({
+            onDidRequestAction: action => {
+                void this.handleEmptyStateAction(action);
+            }
+        });
+
+        this.emptyStateWidget = widget;
+        Widget.attach(widget, document.body);
+
+        this.toDispose.push(Disposable.create(() => {
+            if (widget.isAttached) {
+                Widget.detach(widget);
+            }
+            widget.dispose();
+            this.emptyStateWidget = undefined;
+        }));
+    }
+
     protected watchFloatingFabSource(): void {
         const leftPanelHandler = this.shell.leftPanelHandler;
         if (!leftPanelHandler) {
             return;
         }
 
-        const refresh = () => this.refreshFloatingFabItems();
+        const refresh = () => {
+            this.refreshFloatingFabItems();
+            this.refreshEmptyState();
+        };
 
         leftPanelHandler.tabBar.tabAdded.connect(refresh, this);
         leftPanelHandler.tabBar.currentChanged.connect(refresh, this);
@@ -322,14 +355,30 @@ export class MobileShellContribution implements FrontendApplicationContribution,
         this.shell.onDidChangeActiveWidget(() => {
             collapseIfNeeded();
             this.refreshFloatingFabItems();
+            this.refreshEmptyState();
         });
 
-        this.shell.mainPanel.widgetAdded.connect(() => this.scheduleViewportRelayout(), this);
-        this.shell.mainPanel.widgetActivated.connect(() => this.scheduleViewportRelayout(), this);
+        this.shell.mainPanel.widgetAdded.connect(() => {
+            this.scheduleViewportRelayout();
+            this.refreshEmptyState();
+        }, this);
+        this.shell.mainPanel.widgetRemoved.connect(() => {
+            this.scheduleViewportRelayout();
+            this.refreshEmptyState();
+        }, this);
+        this.shell.mainPanel.widgetActivated.connect(() => {
+            this.scheduleViewportRelayout();
+            this.refreshEmptyState();
+        }, this);
+        this.shell.bottomPanel.widgetAdded.connect(() => this.refreshEmptyState(), this);
+        this.shell.bottomPanel.widgetRemoved.connect(() => this.refreshEmptyState(), this);
 
         this.toDispose.push(Disposable.create(() => {
             this.shell.mainPanel.widgetAdded.disconnect(() => this.scheduleViewportRelayout(), this);
+            this.shell.mainPanel.widgetRemoved.disconnect(() => this.refreshEmptyState(), this);
             this.shell.mainPanel.widgetActivated.disconnect(() => this.scheduleViewportRelayout(), this);
+            this.shell.bottomPanel.widgetAdded.disconnect(() => this.refreshEmptyState(), this);
+            this.shell.bottomPanel.widgetRemoved.disconnect(() => this.refreshEmptyState(), this);
         }));
     }
 
@@ -475,8 +524,104 @@ export class MobileShellContribution implements FrontendApplicationContribution,
         this.fabWidget.setItems(this.fabItems.values());
     }
 
+    protected hasVisibleWorkbenchContent(): boolean {
+        const hasMainWidgets = Array.from(this.shell.mainPanel.widgets()).length > 0;
+        const hasVisibleBottomWidgets = Array.from(this.shell.bottomPanel.widgets()).some(widget => widget.isVisible);
+        const hasOpenSidebar = this.shell.isExpanded('left');
+        return hasMainWidgets || hasVisibleBottomWidgets || hasOpenSidebar;
+    }
+
+    protected createEmptyStateActions(): MobileShellEmptyStateAction[] {
+        const commands = this.commandRegistry;
+        const kiloItem = Array.from(this.fabItems.values()).find(item => item.label.toLowerCase().includes('kilo'));
+
+        return [
+            {
+                id: 'mobile.empty.kilo',
+                label: 'Open Kilo Code',
+                description: 'Jump straight into the AI assistant panel.',
+                iconClass: kiloItem?.iconClass || 'codicon codicon-sparkle',
+                disabled: !kiloItem,
+            },
+            {
+                id: 'mobile.empty.folder',
+                label: 'Open Folder',
+                description: 'Pick a workspace folder to start working.',
+                iconClass: 'codicon codicon-folder-opened',
+                disabled: !commands?.getCommand(OPEN_FOLDER_COMMAND_ID),
+            },
+            {
+                id: 'mobile.empty.explorer',
+                label: 'Show Explorer',
+                description: 'Browse files from the mobile file tree.',
+                iconClass: 'codicon codicon-files',
+                disabled: !commands?.getCommand(SHOW_EXPLORER_COMMAND_ID),
+            },
+            {
+                id: 'mobile.empty.terminal',
+                label: 'Open Terminal',
+                description: 'Drop into the built-in Android terminal.',
+                iconClass: 'codicon codicon-terminal',
+                disabled: !commands?.getCommand(TERMINAL_TOGGLE_COMMAND_ID),
+            },
+            {
+                id: 'mobile.empty.recent',
+                label: 'Recents',
+                description: 'Reopen a recent workspace or file entry.',
+                iconClass: 'codicon codicon-history',
+                disabled: !OPEN_RECENT_COMMAND_IDS.some(id => !!commands?.getCommand(id)),
+            },
+        ];
+    }
+
+    protected refreshEmptyState(): void {
+        if (!this.emptyStateWidget) {
+            return;
+        }
+        this.emptyStateWidget.setActions(this.createEmptyStateActions());
+        this.emptyStateWidget.setVisible(!this.hasVisibleWorkbenchContent());
+    }
+
+    protected async handleEmptyStateAction(action: MobileShellEmptyStateAction): Promise<void> {
+        const commands = this.commandRegistry;
+        if (!commands) {
+            return;
+        }
+
+        switch (action.id) {
+            case 'mobile.empty.kilo': {
+                const kiloItem = Array.from(this.fabItems.values()).find(item => item.label.toLowerCase().includes('kilo'));
+                if (kiloItem) {
+                    await this.shell.activateWidget(kiloItem.id);
+                }
+                break;
+            }
+            case 'mobile.empty.folder':
+                await this.executeIfAvailable(commands, OPEN_FOLDER_COMMAND_ID);
+                break;
+            case 'mobile.empty.explorer':
+                await this.executeIfAvailable(commands, SHOW_EXPLORER_COMMAND_ID);
+                break;
+            case 'mobile.empty.terminal':
+                await this.executeIfAvailable(commands, TERMINAL_TOGGLE_COMMAND_ID);
+                break;
+            case 'mobile.empty.recent':
+                for (const commandId of OPEN_RECENT_COMMAND_IDS) {
+                    if (await this.executeIfAvailable(commands, commandId)) {
+                        break;
+                    }
+                }
+                break;
+            default:
+                break;
+        }
+
+        this.refreshEmptyState();
+    }
+
     registerCommands(commands: CommandRegistry): void {
         this.commandRegistry = commands;
+        this.refreshEmptyState();
 
         commands.registerCommand(MobileShellCommands.SHOW_FILES, {
             execute: async () => {
