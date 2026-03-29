@@ -48,9 +48,20 @@ class MainActivity : AppCompatActivity() {
         requestStoragePermissionsIfNeeded()
         startBackendService()
         requestNotificationPermissionIfNeeded()
+        requestOverlayPermissionIfNeeded()
 
         setProgress(10, "Starting Theia backend…", "Extracting runtime assets")
         startHealthCheck()
+    }
+
+    private fun requestOverlayPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !android.provider.Settings.canDrawOverlays(this)) {
+            val intent = Intent(
+                android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                android.net.Uri.parse("package:$packageName")
+            )
+            startActivityForResult(intent, 2297)
+        }
     }
 
     private fun requestStoragePermissionsIfNeeded() {

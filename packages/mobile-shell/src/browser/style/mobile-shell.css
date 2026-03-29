@@ -537,3 +537,45 @@ body.theia-mobile-shell .theia-notifications-container.theia-notification-toasts
 body.theia-mobile-shell .theia-notifications-container.theia-notification-toasts .theia-notification-list-scroll-container {
   max-height: min(260px, calc(100vh - 180px)) !important;
 }
+
+/* ── Touch-friendly scaling for interactive elements (fat-finger targets) ── */
+
+/* File tree items: larger tap targets */
+body.theia-mobile-shell .theia-TreeNode {
+  min-height: 36px;
+  line-height: 36px;
+  padding: 2px 0;
+}
+
+body.theia-mobile-shell .theia-TreeNodeContent {
+  padding: 0 8px;
+}
+
+body.theia-mobile-shell .theia-FileStatNode {
+  min-height: 40px;
+}
+
+/* Context menus: larger items for touch */
+body.theia-mobile-shell .p-Menu-item {
+  min-height: 40px;
+  padding: 6px 16px;
+  font-size: 14px;
+}
+
+/* Buttons: slightly larger for touch */
+body.theia-mobile-shell button,
+body.theia-mobile-shell .theia-button {
+  min-height: 42px;
+}
+
+/* Scrollbars: wider for touch dragging */
+body.theia-mobile-shell ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+/* Quick input dialog: wider on mobile */
+body.theia-mobile-shell .quick-input-widget {
+  width: min(95vw, 600px) !important;
+  max-width: 95vw !important;
+}

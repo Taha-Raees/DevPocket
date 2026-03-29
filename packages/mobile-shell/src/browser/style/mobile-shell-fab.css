@@ -72,8 +72,8 @@ body.theia-mobile-shell .theia-mobile-fab-main-icon {
 }
 
 body.theia-mobile-shell .theia-mobile-fab-item {
-    width: 44px;
-    height: 44px;
+    width: 48px;
+    height: 48px;
     font-size: 20px;
     opacity: 0;
     transform: translate(0px, 0px);
@@ -82,8 +82,8 @@ body.theia-mobile-shell .theia-mobile-fab-item {
 }
 
 body.theia-mobile-shell .theia-mobile-fab-item-outer {
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
     font-size: 18px;
     border-style: dashed;
 }
@@ -113,4 +113,13 @@ body.theia-mobile-shell .theia-mobile-fab-item-active {
 
 body.theia-mobile-shell .theia-mobile-fab-root.theia-open .theia-mobile-fab-item {
     opacity: 1;
+}
+
+body.theia-mobile-shell .theia-mobile-fab-main {
+    touch-action: none;
+}
+
+body.theia-mobile-shell .theia-mobile-shell-fab-widget.dragging {
+    transition: none !important;
+    opacity: 0.85;
 }

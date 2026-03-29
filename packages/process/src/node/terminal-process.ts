@@ -26,6 +26,8 @@ import { DevNullStream } from './dev-null-stream';
 import { signame } from './utils';
 import { PseudoPty } from './pseudo-pty';
 import { Writable } from 'stream';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export const TerminalProcessOptions = Symbol('TerminalProcessOptions');
 export interface TerminalProcessOptions extends ProcessOptions {
@@ -81,7 +83,9 @@ class StreamTerminal implements IPty {
         this.onExit = this.onExitEmitter.event;
 
         child.stdout.on('data', data => {
-            const text = data.toString();
+            let text = data.toString();
+            // Ensure bare \n gets \r\n for proper xterm rendering
+            text = text.replace(/\r?\n/g, '\r\n');
             this.logger?.info(`[android-terminal][stdout] ${JSON.stringify(text.slice(0, 200))}`);
             this.onDataEmitter.fire(text);
         });
@@ -134,10 +138,15 @@ class StreamTerminal implements IPty {
     resize(columns: number, rows: number): void {
         this._cols = columns;
         this._rows = rows;
+        // Forward resize to the shell via stty so tools can detect the new size
+        try {
+            this.child.stdin.write(`stty cols ${columns} rows ${rows} 2>/dev/null\n`);
+        } catch { /* ignore if stdin is closed */ }
     }
 
     write(data: string): void {
-        const normalized = data.replace(/\r/g, '\n');
+        // Only convert standalone \r (not \r\n) to \n for proper line ending handling
+        const normalized = data.replace(/\r(?!\n)/g, '\n');
         this.logger?.info(`[android-terminal][stdin] ${JSON.stringify(normalized.slice(0, 200))}`);
         this.child.stdin.write(normalized);
     }
@@ -210,7 +219,13 @@ export class TerminalProcess extends Process {
 
         const startTerminal = (command: string): { terminal: IPty | undefined, inputStream: Writable } => {
             if (process.env.THEIA_ANDROID_LITE === '1' || (process.platform as string) === 'android') {
-                this.logger.warn('Using pipe-based shell terminal on Android because node-pty native bindings are unavailable in the embedded runtime.');
+                // Try native PTY helper first for full terminal capabilities
+                const ptyHelperPath = path.join(process.env.THEIA_ANDROID_RUNTIME_BIN || '', 'pty-helper');
+                if (fs.existsSync(ptyHelperPath)) {
+                    this.logger.info('Using native PTY helper on Android');
+                    return this.createNativePtyTerminal(command, options, ringBuffer, ptyHelperPath);
+                }
+                this.logger.warn('pty-helper not found, using pipe-based shell terminal on Android.');
                 return this.createFallbackTerminal(command, options, ringBuffer);
             }
             try {
@@ -327,12 +342,17 @@ export class TerminalProcess extends Process {
             args.push('-i');
         }
 
-        // node-pty sets TERM from options.name, but child_process.spawn does not.
-        // Without TERM, bash may fail to initialise properly (no prompt, no escape sequences).
+        // Set terminal environment variables so tools detect color/size support
+        // even without a real PTY backing the process.
         const env: Record<string, string> = { ...spawnOptions.env } as Record<string, string>;
         if (!env.TERM) {
             env.TERM = (spawnOptions as { name?: string }).name || 'xterm-256color';
         }
+        env.COLORTERM = 'truecolor';
+        env.COLUMNS = String(spawnOptions.cols || 80);
+        env.LINES = String(spawnOptions.rows || 24);
+        env.FORCE_COLOR = '1';
+        env.CLICOLOR_FORCE = '1';
 
         const child = spawnProcess(command, args, {
             cwd: spawnOptions.cwd,
@@ -357,6 +377,82 @@ export class TerminalProcess extends Process {
             command,
             this.logger,
         );
+
+        process.nextTick(() => this.emitOnStarted());
+
+        terminal.onData((data: string) => {
+            ringBuffer.enq(data);
+        });
+
+        terminal.onExit(({ exitCode, signal }) => {
+            this._exitCode = exitCode;
+            if (signal === undefined || signal === 0) {
+                this.onTerminalExit(exitCode, undefined);
+            } else {
+                this.onTerminalExit(undefined, signame(signal));
+            }
+            process.nextTick(() => {
+                if (signal === undefined || signal === 0) {
+                    this.emitOnClose(exitCode, undefined);
+                } else {
+                    this.emitOnClose(undefined, signame(signal));
+                }
+            });
+        });
+
+        child.on('error', error => {
+            this.emitOnErrorAsync(Object.assign(error, {
+                code: (error as NodeJS.ErrnoException).code ?? 'UNKNOWN',
+            }));
+        });
+
+        return { terminal, inputStream: child.stdin };
+    }
+
+    /**
+     * Create a terminal using a native PTY helper binary on Android.
+     * The helper binary calls forkpty() and relays data via stdin/stdout,
+     * providing real PTY semantics (isatty, job control, SIGWINCH).
+     */
+    private createNativePtyTerminal(
+        command: string,
+        options: TerminalProcessOptions,
+        ringBuffer: MultiRingBuffer,
+        ptyHelperPath: string
+    ): { terminal: IPty, inputStream: Writable } {
+        const spawnOptions = options.options || {};
+        const args = [...((isWindows && options.commandLine) || options.args || [])];
+        const cols = spawnOptions.cols || 80;
+        const rows = spawnOptions.rows || 24;
+
+        const env: Record<string, string> = { ...spawnOptions.env } as Record<string, string>;
+        if (!env.TERM) {
+            env.TERM = (spawnOptions as { name?: string }).name || 'xterm-256color';
+        }
+        env.COLORTERM = 'truecolor';
+
+        // Launch pty-helper: pty-helper <cols> <rows> <command> [args...]
+        const helperArgs = [String(cols), String(rows), command, ...args];
+        const child = spawnProcess(ptyHelperPath, helperArgs, {
+            cwd: spawnOptions.cwd,
+            env,
+            stdio: 'pipe',
+        });
+        this.logger.info(`[android-pty-helper][spawn] pid=${child.pid} command=${command} cols=${cols} rows=${rows}`);
+
+        const terminal = new StreamTerminal(child, cols, rows, command, this.logger);
+
+        // Override resize to send SIGWINCH to the helper which forwards it to the PTY
+        const originalResize = terminal.resize.bind(terminal);
+        terminal.resize = (columns: number, newRows: number) => {
+            originalResize(columns, newRows);
+            try {
+                // Signal the helper to resize - it handles SIGWINCH forwarding
+                child.kill('SIGWINCH');
+                // Also write resize command for helpers that support control protocol
+                child.stdin.write(`\x1b[8;${newRows};${columns}t`);
+            } catch { /* ignore if process is gone */ }
+        };
 
         process.nextTick(() => this.emitOnStarted());
 

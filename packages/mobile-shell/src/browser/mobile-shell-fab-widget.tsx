@@ -37,12 +37,118 @@ export class MobileShellFabWidget extends ReactWidget {
     protected readonly itemMap = new Map<string, MobileShellFabItem>();
     protected expanded = false;
 
+    protected dragState: {
+        isDragging: boolean;
+        startX: number;
+        startY: number;
+        startLeft: number;
+        startTop: number;
+        dragTimer: ReturnType<typeof setTimeout> | null;
+    } | null = null;
+
+    protected userPosition: { left: number; top: number } | null = null;
+
     constructor(options: MobileShellFabWidgetOptions) {
         super();
         this.options = options;
         this.id = 'theia-mobile-shell-fab';
         this.addClass('theia-mobile-shell-fab-widget');
+        this.restoreSavedPosition();
     }
+
+    protected restoreSavedPosition(): void {
+        try {
+            const saved = localStorage.getItem('devpocket.fab.position');
+            if (saved) {
+                this.userPosition = JSON.parse(saved);
+            }
+        } catch { /* ignore */ }
+    }
+
+    getUserPosition(): { left: number; top: number } | null {
+        return this.userPosition;
+    }
+
+    setPosition(left: number, top: number): void {
+        this.userPosition = { left, top };
+        this.node.style.left = `${left}px`;
+        this.node.style.top = `${top}px`;
+        this.node.style.right = 'auto';
+        this.node.style.bottom = 'auto';
+    }
+
+    protected clampToViewport(left: number, top: number): { left: number; top: number } {
+        const vv = window.visualViewport;
+        const vw = vv?.width ?? window.innerWidth;
+        const vh = vv?.height ?? window.innerHeight;
+        const ox = vv?.offsetLeft ?? 0;
+        const oy = vv?.offsetTop ?? 0;
+        const w = 64;
+        const h = 64;
+        return {
+            left: Math.max(ox, Math.min(ox + vw - w, left)),
+            top: Math.max(oy, Math.min(oy + vh - h, top)),
+        };
+    }
+
+    protected readonly onFabTouchStart = (e: React.TouchEvent): void => {
+        if (e.touches.length !== 1) {
+            return;
+        }
+        const touch = e.touches[0];
+        const node = this.node;
+        this.dragState = {
+            isDragging: false,
+            startX: touch.clientX,
+            startY: touch.clientY,
+            startLeft: node.offsetLeft,
+            startTop: node.offsetTop,
+            dragTimer: null,
+        };
+
+        const onTouchMove = (ev: TouchEvent) => {
+            if (!this.dragState || ev.touches.length !== 1) {
+                return;
+            }
+            const t = ev.touches[0];
+            const dx = t.clientX - this.dragState.startX;
+            const dy = t.clientY - this.dragState.startY;
+            if (!this.dragState.isDragging && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
+                this.dragState.isDragging = true;
+                this.addClass('dragging');
+            }
+            if (this.dragState.isDragging) {
+                ev.preventDefault();
+                const newLeft = this.dragState.startLeft + dx;
+                const newTop = this.dragState.startTop + dy;
+                const clamped = this.clampToViewport(newLeft, newTop);
+                node.style.left = `${clamped.left}px`;
+                node.style.top = `${clamped.top}px`;
+                node.style.right = 'auto';
+                node.style.bottom = 'auto';
+            }
+        };
+
+        const onTouchEnd = () => {
+            document.removeEventListener('touchmove', onTouchMove);
+            document.removeEventListener('touchend', onTouchEnd);
+            this.removeClass('dragging');
+            if (this.dragState?.isDragging) {
+                const left = node.offsetLeft;
+                const top = node.offsetTop;
+                this.userPosition = { left, top };
+                try {
+                    localStorage.setItem('devpocket.fab.position', JSON.stringify(this.userPosition));
+                } catch { /* ignore */ }
+            } else {
+                this.toggleExpanded();
+            }
+            this.dragState = null;
+        };
+
+        document.addEventListener('touchmove', onTouchMove, { passive: false });
+        document.addEventListener('touchend', onTouchEnd);
+    };
 
     setItems(items: Iterable<MobileShellFabItem>): void {
         this.itemMap.clear();
@@ -139,6 +245,7 @@ export class MobileShellFabWidget extends ReactWidget {
                 className='theia-mobile-fab-main'
                 aria-label='Toggle floating activity menu'
                 title='Floating Activity Menu'
+                onTouchStart={this.onFabTouchStart}
                 onClick={this.toggleExpanded}>
                 <span className='theia-mobile-fab-main-icon'></span>
             </button>

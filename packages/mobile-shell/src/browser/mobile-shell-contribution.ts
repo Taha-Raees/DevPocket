@@ -147,8 +147,21 @@ export class MobileShellContribution implements FrontendApplicationContribution,
         const offsetLeft = visualViewport?.offsetLeft ?? 0;
         const offsetTop = visualViewport?.offsetTop ?? 0;
 
-        const left = Math.max(0, Math.round(offsetLeft + viewportWidth - this.fabViewportMargins.width - this.fabViewportMargins.right));
-        const top = Math.max(0, Math.round(offsetTop + viewportHeight - this.fabViewportMargins.height - this.fabViewportMargins.bottom));
+        const userPos = this.fabWidget?.getUserPosition();
+        let left: number;
+        let top: number;
+
+        if (userPos) {
+            // Clamp saved user position to current viewport bounds
+            const maxLeft = offsetLeft + viewportWidth - this.fabViewportMargins.width;
+            const maxTop = offsetTop + viewportHeight - this.fabViewportMargins.height;
+            left = Math.max(offsetLeft, Math.min(maxLeft, userPos.left));
+            top = Math.max(offsetTop, Math.min(maxTop, userPos.top));
+        } else {
+            // Default: bottom-right corner
+            left = Math.max(0, Math.round(offsetLeft + viewportWidth - this.fabViewportMargins.width - this.fabViewportMargins.right));
+            top = Math.max(0, Math.round(offsetTop + viewportHeight - this.fabViewportMargins.height - this.fabViewportMargins.bottom));
+        }
 
         node.style.left = `${left}px`;
         node.style.top = `${top}px`;

@@ -7,6 +7,7 @@ import android.app.Service
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import java.io.BufferedReader
@@ -44,6 +45,7 @@ class TheiaBackendService : Service() {
     private val stopping = AtomicBoolean(false)
     private var supervisorThread: Thread? = null
     private var backendProcess: Process? = null
+    private var wakeLock: PowerManager.WakeLock? = null
     private lateinit var fileLogger: RotatingFileLogger
 
     override fun onCreate() {
@@ -79,6 +81,11 @@ class TheiaBackendService : Service() {
     private fun runBackendSupervisor() {
         var selectedPort = DEFAULT_PORT
         try {
+            // Acquire WakeLock to keep CPU alive while backend runs
+            val pm = getSystemService(POWER_SERVICE) as PowerManager
+            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "DevPocket::Backend").apply {
+                acquire()
+            }
             AssetExtractor.ensureExtracted(this)
             selectedPort = PortAllocator.findAvailablePort(PORT_RANGE_START, PORT_RANGE_END + 1)
             activePort = selectedPort
@@ -108,6 +115,10 @@ class TheiaBackendService : Service() {
             Log.e(TAG, "Backend supervisor failure", e)
         } finally {
             backendProcess = null
+            if (wakeLock?.isHeld == true) {
+                wakeLock?.release()
+            }
+            wakeLock = null
             if (!stopping.get()) {
                 updateNotification("Backend stopped")
             }

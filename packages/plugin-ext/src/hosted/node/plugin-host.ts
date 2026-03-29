@@ -115,6 +115,19 @@ function patchSpawnOptions(options: cp.SpawnOptions = {}): cp.SpawnOptions {
     if (!env.npm_config_script_shell) {
         env.npm_config_script_shell = env.SHELL;
     }
+    // Help extensions detect terminal capabilities on Android pipe-based terminals
+    if (!env.TERM) {
+        env.TERM = 'xterm-256color';
+    }
+    if (!env.COLORTERM) {
+        env.COLORTERM = 'truecolor';
+    }
+    if (!env.FORCE_COLOR) {
+        env.FORCE_COLOR = '1';
+    }
+    if (!env.CLICOLOR_FORCE) {
+        env.CLICOLOR_FORCE = '1';
+    }
     resolved.env = env;
     return resolved;
 }
@@ -141,6 +154,18 @@ function patchSpawnSyncOptions(options: cp.SpawnSyncOptions = {}): cp.SpawnSyncO
     }
     if (!env.npm_config_script_shell) {
         env.npm_config_script_shell = env.SHELL;
+    }
+    if (!env.TERM) {
+        env.TERM = 'xterm-256color';
+    }
+    if (!env.COLORTERM) {
+        env.COLORTERM = 'truecolor';
+    }
+    if (!env.FORCE_COLOR) {
+        env.FORCE_COLOR = '1';
+    }
+    if (!env.CLICOLOR_FORCE) {
+        env.CLICOLOR_FORCE = '1';
     }
     resolved.env = env;
     return resolved;
