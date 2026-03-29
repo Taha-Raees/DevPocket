@@ -19,3 +19,9 @@ DevPocket runs entirely locally on your Android device:
 - The **Backend** is a Node.js server running natively on Android ARM64, executing within the app's sandbox.
 
 *(Note: The core backend framework is forked from Eclipse Theia, customized heavily for native Android execution.)*
+
+## Run Locally
+```bash
+kill -9 $(lsof -t -i:3100) || true; npm run dev
+```
+https://vscode.dev/tunnel/taha/home/muhammad-taha/Downloads/DevPocket/DevPocket App

@@ -36,7 +36,7 @@ async function start(port, host, argv = process.argv) {
         container.bind(BackendApplicationServer).toConstantValue({ configure: defaultServeStatic });
     }
     let result = undefined;
-    await container.get(CliManager).initializeCli(argv.slice(2), 
+    await container.get(CliManager).initializeCli(argv.slice(2),
         () => container.get(BackendApplication).configured,
         async () => {
             result = container.get(BackendApplication).start(port, host);
@@ -62,6 +62,10 @@ module.exports = async (port, host, argv) => {
         await load(require('@theia/process/lib/common/process-common-module'));
         await load(require('@theia/process/lib/node/process-backend-module'));
         await load(require('@theia/file-search/lib/node/file-search-backend-module'));
+        // Use the standard terminal backend.
+        // Android builds already patch node-pty to load the bundled Termux-compatible
+        // native binding, so forcing pseudo terminals here would create a blank,
+        // non-interactive terminal with no shell output.
         await load(require('@theia/terminal/lib/node/terminal-backend-module'));
         await load(require('@theia/task/lib/node/task-backend-module'));
         await load(require('@theia/navigator/lib/node/navigator-backend-module'));
@@ -82,7 +86,7 @@ module.exports = async (port, host, argv) => {
     } catch (error) {
         if (typeof error !== 'number') {
             console.error('Failed to start the backend application:');
-            console.error(error); 
+            console.error(error);
             process.exitCode = 1;
         }
         throw error;

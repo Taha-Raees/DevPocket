@@ -41,7 +41,9 @@ if (Array.isArray(nodeWebpackConfig.plugins) && nativePlugin) {
 
 // Android PTY fix: node-pty tries to require('../build/Release/pty.node') at runtime.
 // When webpack bundles unixTerminal.js, __dirname becomes the output dir (lib/backend/).
-// We replace the pty.node require with a runtime load from native/pty.node next to the bundle.
+// We replace the pty.node require with a runtime loader that picks the Android runtime
+// binary when THEIA_ANDROID_LITE is enabled, and otherwise falls back to the workspace's
+// glibc build for local desktop/web development.
 // The node-loader rule (test: /\.node$/) would try to inline it as glibc binary — exclude it.
 nodeWebpackConfig.module = nodeWebpackConfig.module || { rules: [] };
 // Exclude pty.node from node-loader so we handle it manually via the alias stub below
@@ -56,9 +58,41 @@ nodeWebpackConfig.module.rules = (nodeWebpackConfig.module.rules || []).map(rule
 const ptyStubPath = path.resolve(__dirname, 'scripts', 'android-pty-stub.js');
 const fs = require('fs');
 fs.writeFileSync(ptyStubPath, [
-    '// Android PTY stub: load Termux pty.node from native/ dir at runtime.',
+    '// Android/local PTY stub: choose the correct pty.node at runtime.',
     'const path = require("path");',
-    'module.exports = __non_webpack_require__(path.join(__dirname, "native", "pty.node"));',
+    'const fs = require("fs");',
+    '',
+    'function loadPty() {',
+    '    const isAndroidLite = process.env.THEIA_ANDROID_LITE === "1" || process.platform === "android";',
+    '    console.log("[android-pty-stub] THEIA_ANDROID_LITE:", process.env.THEIA_ANDROID_LITE, ", process.platform:", process.platform, ", isAndroidLite:", isAndroidLite);',
+    '    console.log("[android-pty-stub] __dirname:", __dirname);',
+    '    ',
+    '    const candidates = isAndroidLite',
+    '        ? [path.join(__dirname, "native", "pty.node")]',
+    '        : [',
+    '            path.resolve(__dirname, "..", "..", "..", "..", "node_modules", "node-pty", "build", "Release", "pty.node"),',
+    '            path.resolve(__dirname, "..", "..", "..", "..", "node_modules", "node-pty", "build", "Debug", "pty.node")',
+    '        ];',
+    '    ',
+    '    console.log("[android-pty-stub] Candidate paths:", candidates);',
+    '    ',
+    '    let lastError;',
+    '    for (const candidate of candidates) {',
+    '        console.log("[android-pty-stub] Trying:", candidate, ", exists:", fs.existsSync(candidate));',
+    '        try {',
+    '            const result = __non_webpack_require__(candidate);',
+    '            console.log("[android-pty-stub] Successfully loaded:", candidate);',
+    '            return result;',
+    '        } catch (error) {',
+    '            console.log("[android-pty-stub] Failed to load", candidate, ":", error.message, error.code ? "code:" + error.code : "");',
+    '            lastError = error;',
+    '        }',
+    '    }',
+    '    console.log("[android-pty-stub] Unable to resolve pty.node, throwing last error");',
+    '    throw lastError || new Error("Unable to resolve pty.node runtime binding");',
+    '}',
+    '',
+    'module.exports = loadPty();',
 ].join('\n'));
 
 nodeWebpackConfig.resolve.alias = {

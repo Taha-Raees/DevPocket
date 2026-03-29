@@ -38,6 +38,7 @@ const blockedBackendModules = [
 const preservedBackendModules = [
     '@theia/process/lib/common/process-common-module',
     '@theia/process/lib/node/process-backend-module',
+    '@theia/terminal/lib/node/terminal-backend-module',
     '@theia/theia-command-console/lib/node/theia-command-console-backend-module'
 ];
 
@@ -119,6 +120,15 @@ function stripBackendModules(source) {
     return output;
 }
 
+function normalizeTerminalBackend(source) {
+    return source.replace(
+        /\s*\/\/ Use Android-specific terminal module that forces pseudo-terminal mode\n\s*\/\/ This bypasses node-pty native bindings which don't work on Android\/bionic\n\s*const \{ androidTerminalBackendModule \} = require\('\.\/android-terminal-backend-module'\);\n\s*await load\(androidTerminalBackendModule\);\n/g,
+        "        // Use the standard terminal backend. Android builds patch node-pty at bundle/runtime level,\n" +
+        "        // so forcing pseudo terminals here would create a blank, non-interactive terminal.\n" +
+        "        await load(require('@theia/terminal/lib/node/terminal-backend-module'));\n"
+    );
+}
+
 function preserveBackendModules(source) {
     let output = source;
     for (const modulePath of preservedBackendModules) {
@@ -167,7 +177,7 @@ if (!frontendBefore || !backendBefore || !webpackBefore) {
 }
 
 const frontendAfter = preserveFrontendModules(stripFrontendModules(frontendBefore));
-let backendAfter = preserveBackendModules(stripBackendModules(backendBefore));
+let backendAfter = preserveBackendModules(normalizeTerminalBackend(stripBackendModules(backendBefore)));
 if (!backendAfter.includes("require('./android-polyfill.js');")) {
     backendAfter = "require('./android-polyfill.js');\n" + backendAfter;
 }

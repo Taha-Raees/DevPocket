@@ -130,13 +130,54 @@ class TheiaBackendService : Service() {
             devPocketWorkspace.mkdirs()
         }
 
+        // Ensure bundled extensions from APK assets are extracted (unpacked) in the extensions directory.
+        // Theia treats --plugins / THEIA_DEFAULT_PLUGINS as system plugins and system plugins
+        // must be pre-unpacked directories — .vsix files are only auto-extracted for user plugins.
+        val bundledExtDir = File(TheiaRuntimePaths.runtimeRoot(this), "extensions")
+        val userExtDir = TheiaRuntimePaths.extensionsRoot(this)
+        if (bundledExtDir.exists() && bundledExtDir.isDirectory) {
+            userExtDir.mkdirs()
+            bundledExtDir.listFiles()?.filter { it.name.endsWith(".vsix") }?.forEach { vsix ->
+                // Extract the vsix (ZIP) into a named directory so Theia finds an unpacked extension
+                val extName = vsix.nameWithoutExtension
+                val destDir = File(userExtDir, extName)
+                if (!destDir.exists()) {
+                    try {
+                        Log.i(TAG, "Extracting bundled extension: ${vsix.name} → ${destDir.absolutePath}")
+                        destDir.mkdirs()
+                        val zipIn = java.util.zip.ZipInputStream(vsix.inputStream().buffered())
+                        var entry = zipIn.nextEntry
+                        while (entry != null) {
+                            // vsix files have entries under "extension/" prefix
+                            val outFile = File(destDir, entry.name)
+                            if (entry.isDirectory) {
+                                outFile.mkdirs()
+                            } else {
+                                outFile.parentFile?.mkdirs()
+                                outFile.outputStream().buffered().use { out ->
+                                    zipIn.copyTo(out)
+                                }
+                            }
+                            zipIn.closeEntry()
+                            entry = zipIn.nextEntry
+                        }
+                        zipIn.close()
+                        Log.i(TAG, "Extracted extension: ${vsix.name}")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to extract extension: ${vsix.name}", e)
+                        destDir.deleteRecursively()
+                    }
+                }
+            }
+        }
+
         val command = mutableListOf(
             node.absolutePath,
             entry.absolutePath,
             devPocketWorkspace.absolutePath,
             "--hostname", "127.0.0.1",
             "--port", port.toString(),
-            "--plugins=local-dir:${TheiaRuntimePaths.extensionsRoot(this).absolutePath}"
+            "--plugins=local-dir:${userExtDir.absolutePath}"
         )
 
         // Add OVSX router config if present

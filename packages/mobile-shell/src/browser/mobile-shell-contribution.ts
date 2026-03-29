@@ -240,10 +240,277 @@ export class MobileShellContribution implements FrontendApplicationContribution,
         this.watchFloatingFabSource();
         this.watchNotificationViewportPosition();
         this.collapseLeftPanelWhenMainWidgetIsActive();
+        this.installBottomSheetDragHandler();
+        this.installMobileKeyboardBar();
+        this.installKeyboardRelayoutWatcher();
 
         window.addEventListener('resize', () => this.updateFabViewportPosition('window.resize'));
         window.visualViewport?.addEventListener('resize', () => this.updateFabViewportPosition('visualViewport.resize'));
         window.visualViewport?.addEventListener('scroll', () => this.updateFabViewportPosition('visualViewport.scroll'));
+    }
+
+    /**
+     * Attach touch-drag handling to the split handle between the main content
+     * and the bottom panel so users can drag the terminal sheet up/down.
+     * Allows fully collapsing the terminal to just above the status bar.
+     */
+    protected installBottomSheetDragHandler(): void {
+        const tryInstall = () => {
+            const splitPanel = document.getElementById('theia-bottom-split-panel');
+            if (!splitPanel) {
+                return;
+            }
+
+            const handle = splitPanel.querySelector(':scope > .lm-SplitPanel-handle, :scope > .p-SplitPanel-handle') as HTMLElement | null;
+            if (!handle) {
+                return;
+            }
+
+            let startY = 0;
+            let startHeight = 0;
+            let bottomPanel: HTMLElement | null = null;
+            const statusBarHeight = 22;
+            const handleHeight = 20;
+            const minCollapsedHeight = 5;
+
+            const onTouchStart = (e: TouchEvent) => {
+                bottomPanel = splitPanel.querySelector('#theia-bottom-content-panel') as HTMLElement | null;
+                if (!bottomPanel || e.touches.length !== 1) {
+                    return;
+                }
+                bottomPanel.style.overflow = '';
+                startY = e.touches[0].clientY;
+                startHeight = bottomPanel.getBoundingClientRect().height;
+                e.preventDefault();
+            };
+
+            const onTouchMove = (e: TouchEvent) => {
+                if (!bottomPanel || e.touches.length !== 1) {
+                    return;
+                }
+                const deltaY = startY - e.touches[0].clientY;
+                const maxHeight = window.innerHeight - statusBarHeight - handleHeight - 40;
+                const newHeight = Math.max(minCollapsedHeight, Math.min(maxHeight, startHeight + deltaY));
+                bottomPanel.style.height = `${newHeight}px`;
+                bottomPanel.style.minHeight = `${minCollapsedHeight}px`;
+                e.preventDefault();
+            };
+
+            const onTouchEnd = () => {
+                if (bottomPanel) {
+                    const finalHeight = bottomPanel.getBoundingClientRect().height;
+                    if (finalHeight < 40) {
+                        bottomPanel.style.height = `${minCollapsedHeight}px`;
+                        bottomPanel.style.overflow = 'hidden';
+                    } else {
+                        bottomPanel.style.overflow = '';
+                    }
+                    window.dispatchEvent(new Event('resize'));
+                    this.scheduleViewportRelayout();
+                }
+                bottomPanel = null;
+            };
+
+            handle.addEventListener('touchstart', onTouchStart, { passive: false });
+            handle.addEventListener('touchmove', onTouchMove, { passive: false });
+            handle.addEventListener('touchend', onTouchEnd);
+
+            this.toDispose.push(Disposable.create(() => {
+                handle.removeEventListener('touchstart', onTouchStart);
+                handle.removeEventListener('touchmove', onTouchMove);
+                handle.removeEventListener('touchend', onTouchEnd);
+            }));
+        };
+
+        tryInstall();
+        setTimeout(tryInstall, 500);
+        setTimeout(tryInstall, 2000);
+    }
+
+    /**
+     * Mount a custom keyboard bar with programming keys (Tab, Esc, Ctrl, arrows, symbols).
+     * Shows when a text input or terminal is focused, hides otherwise.
+     */
+    protected installMobileKeyboardBar(): void {
+        const bar = document.createElement('div');
+        bar.className = 'mobile-keyboard-bar';
+
+        const modState: Record<string, boolean> = { ctrl: false, alt: false, shift: false };
+
+        const keys: Array<{ label: string; key?: string; code?: string; mod?: string; wide?: boolean }> = [
+            { label: 'Esc', key: 'Escape', code: 'Escape' },
+            { label: 'Tab', key: 'Tab', code: 'Tab' },
+            { label: 'Ctrl', mod: 'ctrl' },
+            { label: 'Alt', mod: 'alt' },
+            { label: 'Shift', mod: 'shift' },
+            { label: '\u2191', key: 'ArrowUp', code: 'ArrowUp' },
+            { label: '\u2193', key: 'ArrowDown', code: 'ArrowDown' },
+            { label: '\u2190', key: 'ArrowLeft', code: 'ArrowLeft' },
+            { label: '\u2192', key: 'ArrowRight', code: 'ArrowRight' },
+            { label: '|', key: '|', code: 'Backslash' },
+            { label: '\\', key: '\\', code: 'Backslash' },
+            { label: '/', key: '/', code: 'Slash' },
+            { label: '{', key: '{', code: 'BracketLeft' },
+            { label: '}', key: '}', code: 'BracketRight' },
+            { label: '[', key: '[', code: 'BracketLeft' },
+            { label: ']', key: ']', code: 'BracketRight' },
+            { label: '(', key: '(', code: 'Digit9' },
+            { label: ')', key: ')', code: 'Digit0' },
+            { label: '<', key: '<', code: 'Comma' },
+            { label: '>', key: '>', code: 'Period' },
+            { label: '`', key: '`', code: 'Backquote' },
+            { label: '~', key: '~', code: 'Backquote' },
+            { label: '$', key: '$', code: 'Digit4' },
+            { label: '_', key: '_', code: 'Minus' },
+            { label: '=', key: '=', code: 'Equal' },
+            { label: '+', key: '+', code: 'Equal' },
+            { label: '-', key: '-', code: 'Minus' },
+            { label: '*', key: '*', code: 'Digit8' },
+            { label: '&', key: '&', code: 'Digit7' },
+            { label: ';', key: ';', code: 'Semicolon' },
+            { label: ':', key: ':', code: 'Semicolon' },
+            { label: '"', key: '"', code: 'Quote' },
+            { label: "'", key: "'", code: 'Quote' },
+            { label: '!', key: '!', code: 'Digit1' },
+            { label: '@', key: '@', code: 'Digit2' },
+            { label: '#', key: '#', code: 'Digit3' },
+            { label: '%', key: '%', code: 'Digit5' },
+        ];
+
+        const modButtons = new Map<string, HTMLButtonElement>();
+
+        for (const k of keys) {
+            const btn = document.createElement('button');
+            btn.textContent = k.label;
+            if (k.mod) {
+                btn.classList.add('mod');
+                modButtons.set(k.mod, btn);
+            }
+            btn.addEventListener('touchstart', e => {
+                e.preventDefault();
+                if (k.mod) {
+                    modState[k.mod] = !modState[k.mod];
+                    btn.classList.toggle('active', modState[k.mod]);
+                    return;
+                }
+                const target = document.activeElement as HTMLElement | null;
+                const kbInit: KeyboardEventInit = {
+                    key: k.key!,
+                    code: k.code!,
+                    keyCode: k.key!.length === 1 ? k.key!.charCodeAt(0) : 0,
+                    bubbles: true,
+                    cancelable: true,
+                    ctrlKey: modState.ctrl,
+                    altKey: modState.alt,
+                    shiftKey: modState.shift,
+                };
+                if (target) {
+                    target.dispatchEvent(new KeyboardEvent('keydown', kbInit));
+                    if (k.key!.length === 1 && !modState.ctrl && !modState.alt) {
+                        target.dispatchEvent(new InputEvent('input', { data: k.key!, inputType: 'insertText', bubbles: true }));
+                    }
+                    target.dispatchEvent(new KeyboardEvent('keyup', kbInit));
+                }
+                // Reset modifiers after key press
+                for (const [mod, active] of Object.entries(modState)) {
+                    if (active) {
+                        modState[mod] = false;
+                        modButtons.get(mod)?.classList.remove('active');
+                    }
+                }
+            }, { passive: false });
+            bar.appendChild(btn);
+        }
+
+        document.body.appendChild(bar);
+
+        const showBar = () => bar.classList.add('visible');
+        const hideBar = () => bar.classList.remove('visible');
+
+        // Show when visual viewport shrinks (keyboard opens)
+        if (window.visualViewport) {
+            let lastHeight = window.visualViewport.height;
+            const onViewportResize = () => {
+                const vv = window.visualViewport!;
+                const heightDelta = lastHeight - vv.height;
+                if (heightDelta > 100) {
+                    showBar();
+                } else if (heightDelta < -50) {
+                    hideBar();
+                }
+                lastHeight = vv.height;
+            };
+            window.visualViewport.addEventListener('resize', onViewportResize);
+            this.toDispose.push(Disposable.create(() => {
+                window.visualViewport?.removeEventListener('resize', onViewportResize);
+            }));
+        }
+
+        // Also show/hide on focus of xterm or editor
+        document.addEventListener('focusin', (e: FocusEvent) => {
+            const target = e.target as HTMLElement;
+            if (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT' || target.classList.contains('xterm-helper-textarea')) {
+                showBar();
+            }
+        });
+        document.addEventListener('focusout', () => {
+            setTimeout(() => {
+                const active = document.activeElement;
+                if (!active || active === document.body) {
+                    hideBar();
+                }
+            }, 200);
+        });
+
+        this.toDispose.push(Disposable.create(() => bar.remove()));
+    }
+
+    /**
+     * Watch for keyboard show/hide (via visualViewport resize) and relayout the
+     * visible editors while clearing stale inline mobile width overrides.
+     */
+    protected installKeyboardRelayoutWatcher(): void {
+        if (!window.visualViewport) {
+            return;
+        }
+        let lastVVHeight = window.visualViewport.height;
+        const onResize = () => {
+            const vv = window.visualViewport!;
+            const delta = Math.abs(vv.height - lastVVHeight);
+            lastVVHeight = vv.height;
+            if (delta > 50) {
+                this.forceFullWidthLayout();
+                this.scheduleViewportRelayout();
+            }
+        };
+        window.visualViewport.addEventListener('resize', onResize);
+        this.toDispose.push(Disposable.create(() => {
+            window.visualViewport?.removeEventListener('resize', onResize);
+        }));
+    }
+
+    /**
+     * Clear stale inline width/left overrides so Lumino can recompute the layout.
+     * Older mobile relayout logic pinned viewport widths inline, which can squeeze
+     * editors and shift the bottom split handle off alignment.
+     */
+    protected forceFullWidthLayout(): void {
+        const selectors = [
+            '#theia-left-right-split-panel',
+            '#theia-bottom-split-panel',
+            '#theia-main-content-panel',
+            '#theia-bottom-content-panel',
+            '#theia-main-content-panel > .lm-Widget',
+            '#theia-main-content-panel > .p-Widget',
+            '#theia-bottom-content-panel > .lm-Widget',
+            '#theia-bottom-content-panel > .p-Widget',
+            '#theia-bottom-split-panel > .lm-SplitPanel-handle',
+            '#theia-bottom-split-panel > .p-SplitPanel-handle',
+        ];
+        document.querySelectorAll<HTMLElement>(selectors.join(',')).forEach(element => {
+            element.style.removeProperty('width');
+            element.style.removeProperty('left');
+        });
     }
 
     protected hideTopPanel(): void {
@@ -543,26 +810,31 @@ export class MobileShellContribution implements FrontendApplicationContribution,
     protected scheduleViewportRelayout(): void {
         const dispatch = () => window.dispatchEvent(new Event('resize'));
         const refreshEditors = () => this.refreshVisibleEditors();
+        const fixWidths = () => this.forceFullWidthLayout();
         this.updateFabViewportPosition('scheduleViewportRelayout.start');
-        this.logFabState('scheduleViewportRelayout.start');
+        fixWidths();
         dispatch();
         refreshEditors();
         requestAnimationFrame(() => {
+            fixWidths();
             dispatch();
             refreshEditors();
         });
         setTimeout(() => {
+            fixWidths();
             dispatch();
             refreshEditors();
         }, 50);
         setTimeout(() => {
+            fixWidths();
             dispatch();
             refreshEditors();
-        }, 150);
+        }, 200);
         setTimeout(() => {
+            fixWidths();
             dispatch();
             refreshEditors();
-        }, 300);
+        }, 500);
     }
 
     protected applyMobileEditorOptions(editor: {

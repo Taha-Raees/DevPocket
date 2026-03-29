@@ -14,7 +14,7 @@
 // SPDX-License-Identifier: EPL-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0
 // *****************************************************************************
 
-import { IPty } from 'node-pty';
+import type { IPty } from 'node-pty';
 import { Event } from '@theia/core';
 
 export class PseudoPty implements IPty {

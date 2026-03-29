@@ -14,12 +14,13 @@
 // SPDX-License-Identifier: EPL-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0
 // *****************************************************************************
 
+import { ChildProcessWithoutNullStreams, spawn as spawnProcess } from 'child_process';
 import { injectable, inject, named } from '@theia/core/shared/inversify';
 import { Disposable, DisposableCollection, Emitter, Event, isWindows } from '@theia/core';
 import { ILogger } from '@theia/core/lib/common';
 import { Process, ProcessType, ProcessOptions, /* ProcessErrorEvent */ } from './process';
 import { ProcessManager } from './process-manager';
-import { IPty, spawn } from 'node-pty';
+import type { IPty } from 'node-pty';
 import { MultiRingBuffer, MultiRingBufferReadableStream } from './multi-ring-buffer';
 import { DevNullStream } from './dev-null-stream';
 import { signame } from './utils';
@@ -43,6 +44,119 @@ export interface TerminalProcessFactory {
 export enum NodePtyErrors {
     EACCES = 'Permission denied',
     ENOENT = 'No such file or directory'
+}
+
+class StreamTerminal implements IPty {
+
+    readonly pid: number;
+
+    readonly process: string;
+
+    handleFlowControl = false;
+
+    readonly onData: Event<string>;
+
+    readonly onExit: Event<{ exitCode: number, signal?: number }>;
+
+    protected readonly onDataEmitter = new Emitter<string>();
+
+    protected readonly onExitEmitter = new Emitter<{ exitCode: number, signal?: number }>();
+
+    protected _cols: number;
+
+    protected _rows: number;
+
+    constructor(
+        protected readonly child: ChildProcessWithoutNullStreams,
+        cols: number,
+        rows: number,
+        process: string,
+        protected readonly logger?: ILogger,
+    ) {
+        this.pid = child.pid ?? -1;
+        this.process = process;
+        this._cols = cols;
+        this._rows = rows;
+        this.onData = this.onDataEmitter.event;
+        this.onExit = this.onExitEmitter.event;
+
+        child.stdout.on('data', data => {
+            const text = data.toString();
+            this.logger?.info(`[android-terminal][stdout] ${JSON.stringify(text.slice(0, 200))}`);
+            this.onDataEmitter.fire(text);
+        });
+        child.stderr.on('data', data => {
+            let text = data.toString();
+            // Suppress noisy bash warnings that are expected with pipe-based terminals
+            // (no real PTY, so tcsetpgrp / job control fail harmlessly).
+            text = text.replace(/bash[^:]*: cannot set terminal process group \(\d+\): [^\n]*\n?/g, '');
+            text = text.replace(/bash[^:]*: no job control in this shell\n?/g, '');
+            if (text.length === 0) {
+                return;
+            }
+            this.logger?.info(`[android-terminal][stderr] ${JSON.stringify(text.slice(0, 200))}`);
+            this.onDataEmitter.fire(text);
+        });
+        child.on('exit', (exitCode, signal) => this.onExitEmitter.fire({
+            exitCode: exitCode ?? 0,
+            signal: typeof signal === 'number' ? signal : undefined,
+        }));
+    }
+
+    get cols(): number {
+        return this._cols;
+    }
+
+    get rows(): number {
+        return this._rows;
+    }
+
+    on(event: string, listener: (data: string) => void): void;
+
+    on(event: string, listener: (exitCode: number, signal?: number) => void): void;
+
+    on(event: string, listener: (error?: string) => void): void;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    on(event: string, listener: (...args: any[]) => void): void {
+        switch (event) {
+            case 'data':
+                this.onData(data => listener(data));
+                break;
+            case 'exit':
+                this.onExit(({ exitCode, signal }) => listener(exitCode, signal));
+                break;
+            default:
+                break;
+        }
+    }
+
+    resize(columns: number, rows: number): void {
+        this._cols = columns;
+        this._rows = rows;
+    }
+
+    write(data: string): void {
+        const normalized = data.replace(/\r/g, '\n');
+        this.logger?.info(`[android-terminal][stdin] ${JSON.stringify(normalized.slice(0, 200))}`);
+        this.child.stdin.write(normalized);
+    }
+
+    kill(signal?: string): void {
+        this.child.kill(signal as NodeJS.Signals | number | undefined);
+    }
+
+    pause(): void {
+        this.child.stdout.pause();
+        this.child.stderr.pause();
+    }
+
+    resume(): void {
+        this.child.stdout.resume();
+        this.child.stderr.resume();
+    }
+
+    clear(): void { }
 }
 
 /**
@@ -95,6 +209,10 @@ export class TerminalProcess extends Process {
         }
 
         const startTerminal = (command: string): { terminal: IPty | undefined, inputStream: Writable } => {
+            if (process.env.THEIA_ANDROID_LITE === '1' || (process.platform as string) === 'android') {
+                this.logger.warn('Using pipe-based shell terminal on Android because node-pty native bindings are unavailable in the embedded runtime.');
+                return this.createFallbackTerminal(command, options, ringBuffer);
+            }
             try {
                 return this.createPseudoTerminal(command, options, ringBuffer);
             } catch (error) {
@@ -122,6 +240,12 @@ export class TerminalProcess extends Process {
                     error.path = options.command;
                 }
 
+                if ((process.env.THEIA_ANDROID_LITE === '1' || (process.platform as string) === 'android')
+                    && error instanceof Error && /node-pty native fork function is unavailable/i.test(error.message)) {
+                    this.logger.warn('node-pty native fork is unavailable on Android, falling back to pipe-based shell terminal.');
+                    return this.createFallbackTerminal(command, options, ringBuffer);
+                }
+
                 // node-pty throws exceptions on Windows.
                 // Call the client error handler, but first give them a chance to register it.
                 this.emitOnErrorAsync(error);
@@ -144,6 +268,7 @@ export class TerminalProcess extends Process {
      * @returns the terminal PTY and a stream by which it may be sent input
      */
     private createPseudoTerminal(command: string, options: TerminalProcessOptions, ringBuffer: MultiRingBuffer): { terminal: IPty | undefined, inputStream: Writable } {
+        const { spawn } = require('node-pty') as typeof import('node-pty');
         const terminal = spawn(
             command,
             (isWindows && options.commandLine) || options.args || [],
@@ -193,6 +318,75 @@ export class TerminalProcess extends Process {
         });
 
         return { terminal, inputStream };
+    }
+
+    private createFallbackTerminal(command: string, options: TerminalProcessOptions, ringBuffer: MultiRingBuffer): { terminal: IPty, inputStream: Writable } {
+        const spawnOptions = options.options || {};
+        const args = [...((isWindows && options.commandLine) || options.args || [])];
+        if (!args.includes('-i')) {
+            args.push('-i');
+        }
+
+        // node-pty sets TERM from options.name, but child_process.spawn does not.
+        // Without TERM, bash may fail to initialise properly (no prompt, no escape sequences).
+        const env: Record<string, string> = { ...spawnOptions.env } as Record<string, string>;
+        if (!env.TERM) {
+            env.TERM = (spawnOptions as { name?: string }).name || 'xterm-256color';
+        }
+
+        const child = spawnProcess(command, args, {
+            cwd: spawnOptions.cwd,
+            env,
+            stdio: 'pipe',
+        });
+        this.logger.info(`[android-terminal][spawn] pid=${child.pid} command=${command} args=${JSON.stringify(args)} cwd=${spawnOptions.cwd} TERM=${env.TERM}`);
+
+        child.on('spawn', () => {
+            this.logger.info(`[android-terminal][spawn-ok] pid=${child.pid} — shell process started successfully`);
+        });
+        child.on('error', err => {
+            this.logger.error(`[android-terminal][spawn-error] ${err.message}`);
+        });
+        child.on('exit', (code, signal) => {
+            this.logger.info(`[android-terminal][exit] pid=${child.pid} code=${code} signal=${signal}`);
+        });
+        const terminal = new StreamTerminal(
+            child,
+            spawnOptions.cols || 80,
+            spawnOptions.rows || 24,
+            command,
+            this.logger,
+        );
+
+        process.nextTick(() => this.emitOnStarted());
+
+        terminal.onData((data: string) => {
+            ringBuffer.enq(data);
+        });
+
+        terminal.onExit(({ exitCode, signal }) => {
+            this._exitCode = exitCode;
+            if (signal === undefined || signal === 0) {
+                this.onTerminalExit(exitCode, undefined);
+            } else {
+                this.onTerminalExit(undefined, signame(signal));
+            }
+            process.nextTick(() => {
+                if (signal === undefined || signal === 0) {
+                    this.emitOnClose(exitCode, undefined);
+                } else {
+                    this.emitOnClose(undefined, signame(signal));
+                }
+            });
+        });
+
+        child.on('error', error => {
+            this.emitOnErrorAsync(Object.assign(error, {
+                code: (error as NodeJS.ErrnoException).code ?? 'UNKNOWN',
+            }));
+        });
+
+        return { terminal, inputStream: child.stdin };
     }
 
     createOutputStream(): MultiRingBufferReadableStream {

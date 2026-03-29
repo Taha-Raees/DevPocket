@@ -40,11 +40,17 @@ export class MobileShellEmptyStateWidget extends ReactWidget {
         this.options = options;
         this.id = 'theia-mobile-shell-empty-state';
         this.addClass('theia-mobile-empty-state-widget');
+        this.node.style.display = 'none';
     }
 
     setVisible(visible: boolean): void {
         if (this.visible !== visible) {
             this.visible = visible;
+            // Toggle the outer widget container's display so the fixed-position
+            // overlay is fully removed from rendering when the empty state is
+            // not active.  Without this the container covers the bottom panel
+            // (terminal) even though React renders null children.
+            this.node.style.display = visible ? '' : 'none';
             this.update();
         }
     }

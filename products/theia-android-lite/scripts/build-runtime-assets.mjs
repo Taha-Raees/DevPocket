@@ -202,4 +202,17 @@ if (existsSync(termuxLibDir)) {
     console.warn(`WARNING: Termux lib dir not found at ${termuxLibDir}`);
 }
 
+// Bundle pre-installed extensions (VSIX files) so they are available on first launch
+const extensionsOut = path.resolve(runtimeOut, 'extensions');
+const extensionsSrc = path.resolve(repoRoot, 'assets');
+mkdirSync(extensionsOut, { recursive: true });
+if (existsSync(extensionsSrc)) {
+    for (const entry of readdirSync(extensionsSrc)) {
+        if (entry.endsWith('.vsix')) {
+            cpSync(path.resolve(extensionsSrc, entry), path.resolve(extensionsOut, entry));
+            console.log(`Bundled extension: ${entry}`);
+        }
+    }
+}
+
 console.log(`Runtime assets prepared at ${runtimeOut}`);

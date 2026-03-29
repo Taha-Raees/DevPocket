@@ -211,8 +211,18 @@ export class TerminalWidgetImpl extends TerminalWidget implements StatefulWidget
         this.fitAddon = new FitAddon();
         this.term.loadAddon(this.fitAddon);
 
-        this.webglAddon = new WebglAddon();
-        this.term.loadAddon(this.webglAddon);
+        const isAndroidWebView = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
+        if (!isAndroidWebView) {
+            this.webglAddon = new WebglAddon();
+            try {
+                this.term.loadAddon(this.webglAddon);
+            } catch (error) {
+                this.logger.warn(`WebGL terminal renderer unavailable, falling back to canvas: ${error}`);
+                this.webglAddon.dispose();
+            }
+        } else {
+            this.logger.info('Skipping WebGL terminal renderer on Android WebView and using the default canvas renderer.');
+        }
 
         this.initializeLinkHover();
 

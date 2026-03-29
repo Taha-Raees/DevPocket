@@ -11,10 +11,10 @@ object AssetExtractor {
 
     private const val TAG = "TheiaAssetExtractor"
     private const val ASSET_ROOT = "runtime"
-    private const val MARKER_FILE = ".runtime-extracted-v11"
+    private const val MARKER_FILE = ".runtime-extracted-v19"
 
     private val EXECUTABLE_BASENAMES = setOf(
-        "node", "node-wrapper", "npm", "npx", "rg", "git", "ssh", "busybox", "ps", "sh"
+        "node", "node-wrapper", "npm", "npx", "rg", "git", "ssh", "busybox", "ps", "sh", "bash"
     )
 
     @Throws(IOException::class)
