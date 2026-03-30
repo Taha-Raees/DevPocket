@@ -18,8 +18,8 @@ body.theia-mobile-shell .theia-mobile-shell-fab-widget {
     position: fixed;
     right: 16px;
     bottom: 30px;
-    width: 64px;
-    height: 64px;
+    width: 76px;
+    height: 76px;
     z-index: 3000;
     pointer-events: none;
     overflow: visible !important;
@@ -28,8 +28,8 @@ body.theia-mobile-shell .theia-mobile-shell-fab-widget {
 
 body.theia-mobile-shell .theia-mobile-fab-root {
     position: relative;
-    width: 64px;
-    height: 64px;
+    width: 76px;
+    height: 76px;
     pointer-events: none;
     overflow: visible;
 }
@@ -52,11 +52,11 @@ body.theia-mobile-shell .theia-mobile-fab-item {
 }
 
 body.theia-mobile-shell .theia-mobile-fab-main {
-    width: 48px;
-    height: 48px;
+    width: 60px;
+    height: 60px;
     z-index: 10;
     padding: 0;
-    border: 2.5px solid rgba(245, 197, 24, 0.45);
+    border: 3px solid rgba(245, 197, 24, 0.45);
     border-radius: 50%;
     background: rgba(26, 26, 46, 0.88) !important;
     box-shadow: 0 0 14px rgba(245, 197, 24, 0.18), 0 8px 24px rgba(0, 0, 0, 0.4);
@@ -64,8 +64,8 @@ body.theia-mobile-shell .theia-mobile-fab-main {
 }
 
 body.theia-mobile-shell .theia-mobile-fab-main-icon {
-    width: 42px;
-    height: 42px;
+    width: 52px;
+    height: 52px;
     background-image: url('../../../../../assets/fav.svg');
     background-repeat: no-repeat;
     background-size: contain;

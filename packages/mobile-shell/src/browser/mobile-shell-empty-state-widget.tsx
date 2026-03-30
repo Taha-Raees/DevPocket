@@ -80,7 +80,6 @@ export class MobileShellEmptyStateWidget extends ReactWidget {
             </span>
             <span className='theia-mobile-empty-state-action-content'>
                 <span className='theia-mobile-empty-state-action-label'>{action.label}</span>
-                <span className='theia-mobile-empty-state-action-description'>{action.description}</span>
             </span>
         </button>;
     }
@@ -93,7 +92,6 @@ export class MobileShellEmptyStateWidget extends ReactWidget {
         return <div className='theia-mobile-empty-state'>
             <div className='theia-mobile-empty-state-brand'>
                 <div className='theia-mobile-empty-state-logo'></div>
-                <div className='theia-mobile-empty-state-title'>DevPocket</div>
                 <div className='theia-mobile-empty-state-subtitle'>Open your tools and jump back into work.</div>
             </div>
             <div className='theia-mobile-empty-state-actions'>

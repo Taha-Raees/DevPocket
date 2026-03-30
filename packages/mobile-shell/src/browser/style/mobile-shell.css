@@ -59,6 +59,8 @@ body.theia-mobile-shell #theia-statusBar {
   max-height: 22px;
   font-size: 11px;
   border-top: 1px solid var(--theia-sideBarSectionHeader-border);
+  background-color: #3434397e !important;
+  color: rgba(255, 255, 255, 0.8) !important;
 }
 
 /* Activity bar custom buttons (Files / Terminal) */
@@ -171,8 +173,8 @@ body.theia-mobile-shell #theia-left-content-panel.theia-mod-collapsed .theia-sid
    Use 100vw to override regardless of parent constraints or collapse state. */
 
 /* Hide the split handle between left panel and the rest */
-body.theia-mobile-shell #theia-left-right-split-panel > .lm-SplitPanel-handle,
-body.theia-mobile-shell #theia-left-right-split-panel > .p-SplitPanel-handle {
+body.theia-mobile-shell #theia-left-right-split-panel>.lm-SplitPanel-handle,
+body.theia-mobile-shell #theia-left-right-split-panel>.p-SplitPanel-handle {
   display: none !important;
   width: 0 !important;
 }
@@ -207,8 +209,8 @@ body.theia-mobile-shell #theia-main-content-panel .p-DockPanel-widget,
 body.theia-mobile-shell #theia-main-content-panel .theia-app-main,
 body.theia-mobile-shell #theia-main-content-panel .theia-app-centers,
 body.theia-mobile-shell #theia-main-content-panel .theia-editor-widget,
-body.theia-mobile-shell #theia-main-content-panel > .lm-Widget,
-body.theia-mobile-shell #theia-main-content-panel > .p-Widget {
+body.theia-mobile-shell #theia-main-content-panel>.lm-Widget,
+body.theia-mobile-shell #theia-main-content-panel>.p-Widget {
   left: 0 !important;
   width: 100% !important;
   min-width: 100% !important;
@@ -308,8 +310,8 @@ body.theia-mobile-shell .theia-mobile-empty-state-brand {
 }
 
 body.theia-mobile-shell .theia-mobile-empty-state-logo {
-  width: 88px;
-  height: 88px;
+  width: 110px;
+  height: 110px;
   background-image: url('../../../../../assets/logo2.svg');
   background-repeat: no-repeat;
   background-position: center;
@@ -330,21 +332,23 @@ body.theia-mobile-shell .theia-mobile-empty-state-subtitle {
 body.theia-mobile-shell .theia-mobile-empty-state-actions {
   width: 100%;
   display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: 12px;
 }
 
 body.theia-mobile-shell .theia-mobile-empty-state-action {
   width: 100%;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 14px;
-  border: 1px solid var(--theia-widget-border, rgba(255, 255, 255, 0.12));
-  border-radius: 16px;
-  padding: 14px 16px;
-  background: color-mix(in srgb, var(--theia-editor-background) 92%, white 8%);
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  padding: 8px 0;
+  background: transparent;
   color: inherit;
-  text-align: left;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+  text-align: center;
+  box-shadow: none;
 }
 
 body.theia-mobile-shell .theia-mobile-empty-state-action:disabled {
@@ -352,31 +356,36 @@ body.theia-mobile-shell .theia-mobile-empty-state-action:disabled {
 }
 
 body.theia-mobile-shell .theia-mobile-empty-state-action-icon {
-  width: 40px;
-  height: 40px;
-  min-width: 40px;
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
-  background: rgba(127, 127, 127, 0.14);
-  font-size: 20px;
+  color: var(--theia-widget-foreground, #f5c518);
+  background: transparent;
+}
+
+body.theia-mobile-shell .theia-mobile-empty-state-action-icon i {
+  font-size: 30px !important;
 }
 
 body.theia-mobile-shell .theia-mobile-empty-state-action-content {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
 }
 
 body.theia-mobile-shell .theia-mobile-empty-state-action-label {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.2;
 }
 
 body.theia-mobile-shell .theia-mobile-empty-state-action-description {
-  font-size: 12px;
-  color: var(--theia-descriptionForeground, rgba(255, 255, 255, 0.6));
+  display: none;
 }
 
 /* ── Bottom panel: full-width terminal + sheet drag handle ── */
@@ -389,8 +398,8 @@ body.theia-mobile-shell #theia-bottom-content-panel {
   left: 0 !important;
 }
 
-body.theia-mobile-shell #theia-bottom-content-panel > .lm-Widget,
-body.theia-mobile-shell #theia-bottom-content-panel > .p-Widget,
+body.theia-mobile-shell #theia-bottom-content-panel>.lm-Widget,
+body.theia-mobile-shell #theia-bottom-content-panel>.p-Widget,
 body.theia-mobile-shell #theia-bottom-content-panel .lm-DockPanel-widget,
 body.theia-mobile-shell #theia-bottom-content-panel .p-DockPanel-widget {
   width: 100% !important;
@@ -429,29 +438,54 @@ body.theia-mobile-shell .terminal-widget .xterm-screen {
 }
 
 /* Make the split handle between main content and bottom panel into a visible drag bar (sheet handle). */
-body.theia-mobile-shell #theia-bottom-split-panel > .lm-SplitPanel-handle,
-body.theia-mobile-shell #theia-bottom-split-panel > .p-SplitPanel-handle {
+body.theia-mobile-shell #theia-bottom-split-panel>.lm-SplitPanel-handle:not(.lm-mod-hidden):last-of-type,
+body.theia-mobile-shell #theia-bottom-split-panel>.p-SplitPanel-handle:not(.p-mod-hidden):last-of-type {
   left: 0 !important;
   width: 100vw !important;
-  height: 20px !important;
-  min-height: 20px !important;
-  background: var(--theia-panel-border, rgba(128, 128, 128, 0.35));
+  height: 4px !important;
+  min-height: 4px !important;
+  background: transparent;
   cursor: row-resize;
   display: flex !important;
   align-items: center;
   justify-content: center;
   z-index: 5;
   touch-action: none;
+  border-top: 1px solid var(--theia-panel-border, rgba(128, 128, 128, 0.35));
+}
+
+/* Fat finger hit area for drag handle */
+body.theia-mobile-shell #theia-bottom-split-panel>.lm-SplitPanel-handle:last-of-type::before,
+body.theia-mobile-shell #theia-bottom-split-panel>.p-SplitPanel-handle:last-of-type::before {
+  content: '';
+  position: absolute;
+  top: -16px;
+  bottom: -4px;
+  left: 0;
+  right: 0;
 }
 
 /* Visual pill indicator on the sheet handle */
-body.theia-mobile-shell #theia-bottom-split-panel>.lm-SplitPanel-handle::after,
-body.theia-mobile-shell #theia-bottom-split-panel>.p-SplitPanel-handle::after {
+body.theia-mobile-shell #theia-bottom-split-panel>.lm-SplitPanel-handle:last-of-type::after,
+body.theia-mobile-shell #theia-bottom-split-panel>.p-SplitPanel-handle:last-of-type::after {
   content: '';
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
   width: 36px;
   height: 4px;
   border-radius: 2px;
   background: rgba(255, 255, 255, 0.35);
+}
+
+/* Hide all other handles in bottom split panel */
+body.theia-mobile-shell #theia-bottom-split-panel>.lm-SplitPanel-handle:not(:last-of-type),
+body.theia-mobile-shell #theia-bottom-split-panel>.p-SplitPanel-handle:not(:last-of-type) {
+  display: none !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  border: none !important;
 }
 
 /* ── Custom keyboard bar ── */
@@ -498,7 +532,6 @@ body.theia-mobile-shell .mobile-keyboard-bar button {
   align-items: center;
   justify-content: center;
 }
-
 body.theia-mobile-shell .mobile-keyboard-bar button:active {
   background: var(--theia-focusBorder, #007acc);
   color: #fff;
@@ -597,8 +630,15 @@ body.theia-mobile-shell .theia-preload {
 }
 
 @keyframes dp-preload-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.45; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.45;
+  }
 }
 
 /* ── DP Theme yellow accent overrides ── */
@@ -616,12 +656,12 @@ body[data-dp-theme="dp-dark"] .theia-statusBar {
 }
 
 body[data-dp-theme="dp-light"] {
-  --theia-focusBorder: #C49B00;
-  --theia-activityBar-activeBorder: #C49B00;
+  --theia-focusBorder: #F5C518;
+  --theia-activityBar-activeBorder: #F5C518;
   --theia-scrollbarSlider-background: rgba(196, 155, 0, 0.3);
   --theia-scrollbarSlider-hoverBackground: rgba(196, 155, 0, 0.5);
   --theia-scrollbarSlider-activeBackground: rgba(196, 155, 0, 0.7);
-  --theia-progressBar-background: #C49B00;
+  --theia-progressBar-background: #F5C518;
 }
 
 body[data-dp-theme="dp-light"] .theia-statusBar {

@@ -69,8 +69,8 @@ export class MobileShellContribution implements FrontendApplicationContribution,
     protected readonly fabViewportMargins = {
         right: 16,
         bottom: 30,
-        width: 64,
-        height: 64,
+        width: 76,
+        height: 76,
     };
 
     protected logFabState(reason: string): void {
@@ -274,7 +274,8 @@ export class MobileShellContribution implements FrontendApplicationContribution,
                 return;
             }
 
-            const handle = splitPanel.querySelector(':scope > .lm-SplitPanel-handle, :scope > .p-SplitPanel-handle') as HTMLElement | null;
+            const handles = splitPanel.querySelectorAll(':scope > .lm-SplitPanel-handle, :scope > .p-SplitPanel-handle');
+            const handle = handles.length > 0 ? handles[handles.length - 1] as HTMLElement : null;
             if (!handle) {
                 return;
             }
@@ -283,7 +284,7 @@ export class MobileShellContribution implements FrontendApplicationContribution,
             let startHeight = 0;
             let bottomPanel: HTMLElement | null = null;
             const statusBarHeight = 22;
-            const handleHeight = 20;
+            const handleHeight = 4;
             const minCollapsedHeight = 0;
 
             const onTouchStart = (e: TouchEvent) => {
@@ -1018,6 +1019,62 @@ export class MobileShellContribution implements FrontendApplicationContribution,
                 iconClass: 'codicon codicon-history',
                 disabled: !OPEN_RECENT_COMMAND_IDS.some(id => !!commands?.getCommand(id)),
             },
+            {
+                id: 'mobile.empty.search',
+                label: 'Search',
+                description: 'Global find in files.',
+                iconClass: 'codicon codicon-search',
+                disabled: !commands?.getCommand('workbench.view.search'),
+            },
+            {
+                id: 'mobile.empty.git',
+                label: 'Source Control',
+                description: 'Version control tools.',
+                iconClass: 'codicon codicon-source-control',
+                disabled: !commands?.getCommand('workbench.view.scm'),
+            },
+            {
+                id: 'mobile.empty.extensions',
+                label: 'Extensions',
+                description: 'Manage extensions.',
+                iconClass: 'codicon codicon-extensions',
+                disabled: !commands?.getCommand('workbench.view.extension'),
+            },
+            {
+                id: 'mobile.empty.debug',
+                label: 'Run & Debug',
+                description: 'Launch configurations.',
+                iconClass: 'codicon codicon-debug-alt',
+                disabled: !commands?.getCommand('workbench.view.debug'),
+            },
+            {
+                id: 'mobile.empty.settings',
+                label: 'Settings',
+                description: 'Open preferences.',
+                iconClass: 'codicon codicon-settings-gear',
+                disabled: !commands?.getCommand('core.settings.open'),
+            },
+            {
+                id: 'mobile.empty.theme',
+                label: 'Color Theme',
+                description: 'Switch UI themes.',
+                iconClass: 'codicon codicon-color-mode',
+                disabled: !commands?.getCommand('workbench.action.selectTheme'),
+            },
+            {
+                id: 'mobile.empty.commands',
+                label: 'Command Palette',
+                description: 'Access all commands.',
+                iconClass: 'codicon codicon-code',
+                disabled: !commands?.getCommand('workbench.action.showCommands'),
+            },
+            {
+                id: 'mobile.empty.closeFolder',
+                label: 'Close Folder',
+                description: 'Close active project.',
+                iconClass: 'codicon codicon-close',
+                disabled: !commands?.getCommand('workspace:close'),
+            },
         ];
     }
 
@@ -1058,6 +1115,30 @@ export class MobileShellContribution implements FrontendApplicationContribution,
                         break;
                     }
                 }
+                break;
+            case 'mobile.empty.search':
+                await this.executeIfAvailable(commands, 'workbench.view.search');
+                break;
+            case 'mobile.empty.git':
+                await this.executeIfAvailable(commands, 'workbench.view.scm');
+                break;
+            case 'mobile.empty.extensions':
+                await this.executeIfAvailable(commands, 'workbench.view.extension');
+                break;
+            case 'mobile.empty.debug':
+                await this.executeIfAvailable(commands, 'workbench.view.debug');
+                break;
+            case 'mobile.empty.settings':
+                await this.executeIfAvailable(commands, 'core.settings.open');
+                break;
+            case 'mobile.empty.theme':
+                await this.executeIfAvailable(commands, 'workbench.action.selectTheme');
+                break;
+            case 'mobile.empty.commands':
+                await this.executeIfAvailable(commands, 'workbench.action.showCommands');
+                break;
+            case 'mobile.empty.closeFolder':
+                await this.executeIfAvailable(commands, 'workspace:close');
                 break;
             default:
                 break;
