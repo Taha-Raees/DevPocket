@@ -579,3 +579,51 @@ body.theia-mobile-shell .quick-input-widget {
   width: min(95vw, 600px) !important;
   max-width: 95vw !important;
 }
+
+/* ── Web preload spinner: replace Theia codicon spinner with DevPocket logo ── */
+body.theia-mobile-shell .theia-preload::after {
+  content: '' !important;
+  animation: none !important;
+  font-size: 0 !important;
+  display: none !important;
+}
+
+body.theia-mobile-shell .theia-preload {
+  background-image: url('../../../../../assets/logo2.svg') !important;
+  background-size: 140px 140px !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  animation: dp-preload-pulse 1.6s ease-in-out infinite !important;
+}
+
+@keyframes dp-preload-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+/* ── DP Theme yellow accent overrides ── */
+body[data-dp-theme="dp-dark"] {
+  --theia-focusBorder: #F5C518;
+  --theia-activityBar-activeBorder: #F5C518;
+  --theia-scrollbarSlider-background: rgba(245, 197, 24, 0.3);
+  --theia-scrollbarSlider-hoverBackground: rgba(245, 197, 24, 0.5);
+  --theia-scrollbarSlider-activeBackground: rgba(245, 197, 24, 0.7);
+  --theia-progressBar-background: #F5C518;
+}
+
+body[data-dp-theme="dp-dark"] .theia-statusBar {
+  border-top: 1.5px solid rgba(245, 197, 24, 0.4) !important;
+}
+
+body[data-dp-theme="dp-light"] {
+  --theia-focusBorder: #C49B00;
+  --theia-activityBar-activeBorder: #C49B00;
+  --theia-scrollbarSlider-background: rgba(196, 155, 0, 0.3);
+  --theia-scrollbarSlider-hoverBackground: rgba(196, 155, 0, 0.5);
+  --theia-scrollbarSlider-activeBackground: rgba(196, 155, 0, 0.7);
+  --theia-progressBar-background: #C49B00;
+}
+
+body[data-dp-theme="dp-light"] .theia-statusBar {
+  border-top: 1.5px solid rgba(196, 155, 0, 0.5) !important;
+}

@@ -56,9 +56,11 @@ body.theia-mobile-shell .theia-mobile-fab-main {
     height: 48px;
     z-index: 10;
     padding: 0;
-    border: none;
-    background: transparent;
-    box-shadow: none;
+    border: 2.5px solid rgba(245, 197, 24, 0.45);
+    border-radius: 50%;
+    background: rgba(26, 26, 46, 0.88) !important;
+    box-shadow: 0 0 14px rgba(245, 197, 24, 0.18), 0 8px 24px rgba(0, 0, 0, 0.4);
+    transition: border-color 200ms ease, box-shadow 200ms ease, background 200ms ease;
 }
 
 body.theia-mobile-shell .theia-mobile-fab-main-icon {
@@ -122,4 +124,15 @@ body.theia-mobile-shell .theia-mobile-fab-main {
 body.theia-mobile-shell .theia-mobile-shell-fab-widget.dragging {
     transition: none !important;
     opacity: 0.85;
+}
+
+/* FAB active state — menu open: bright yellow ring + glow */
+body.theia-mobile-shell .theia-mobile-fab-root.theia-open .theia-mobile-fab-main {
+    border-color: #F5C518;
+    background: rgba(245, 197, 24, 0.12) !important;
+    box-shadow: 0 0 20px rgba(245, 197, 24, 0.55), 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+body.theia-mobile-shell .theia-mobile-fab-root.theia-open .theia-mobile-fab-main-icon {
+    filter: drop-shadow(0 0 8px rgba(245, 197, 24, 0.7));
 }

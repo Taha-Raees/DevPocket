@@ -6,8 +6,8 @@ const { FrontendApplicationConfigProvider } = require('@theia/core/lib/browser/f
 FrontendApplicationConfigProvider.set({
     "applicationName": "Theia Android Lite",
     "defaultTheme": {
-        "light": "light",
-        "dark": "dark"
+        "light": "dp-light",
+        "dark": "dp-dark"
     },
     "defaultIconTheme": "theia-file-icons",
     "electron": {

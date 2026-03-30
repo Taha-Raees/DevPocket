@@ -1,0 +1,29 @@
+{
+  "$schema": "vscode://schemas/color-theme",
+  "name": "DP Dark",
+  "include": "./dark_plus.json",
+  "colors": {
+    "focusBorder": "#F5C518",
+    "activityBar.activeBorder": "#F5C518",
+    "activityBar.activeBackground": "#1A1A2E",
+    "statusBar.background": "#1A1A2E",
+    "statusBar.foreground": "#F5C518",
+    "statusBar.border": "#F5C51830",
+    "button.background": "#F5C518",
+    "button.foreground": "#1A1A2E",
+    "button.hoverBackground": "#E6B800",
+    "inputValidation.infoBorder": "#F5C518",
+    "tab.activeBorderTop": "#F5C518",
+    "editorCursor.foreground": "#F5C518",
+    "terminal.ansiYellow": "#F5C518",
+    "progressBar.background": "#F5C518",
+    "selection.background": "#F5C51840",
+    "list.activeSelectionBackground": "#F5C51825",
+    "list.hoverBackground": "#F5C51815",
+    "editorLineNumber.activeForeground": "#F5C518",
+    "breadcrumb.activeSelectionForeground": "#F5C518",
+    "notificationLink.foreground": "#F5C518",
+    "textLink.foreground": "#F5C518",
+    "terminal.tab.activeBorder": "#F5C518"
+  }
+}

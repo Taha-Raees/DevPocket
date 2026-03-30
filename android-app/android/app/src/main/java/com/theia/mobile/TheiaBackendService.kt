@@ -236,6 +236,32 @@ class TheiaBackendService : Service() {
         // Prevent "Cannot move to trash" errors since Android /storage/emulated/0 lacks a valid .Trash
         env["THEIA_DISABLE_TRASH"] = "true"
 
+        // Git: set GIT_EXEC_PATH so git can find its helper commands (git-remote-https, etc.)
+        val gitExecPath = File(File(TheiaRuntimePaths.runtimeRoot(this), "bin"), "libexec/git-core").absolutePath
+        env["GIT_EXEC_PATH"] = gitExecPath
+
+        // Git: prevent git from reading Termux's gitconfig which doesn't exist in our sandbox
+        env["GIT_CONFIG_NOSYSTEM"] = "1"
+
+        // Git: set a default template dir to prevent "warning: templates not found"
+        env["GIT_TEMPLATE_DIR"] = ""
+
+        // SSL: point OpenSSL and curl/git at our bundled CA certificate bundle
+        val caCertPath = File(TheiaRuntimePaths.runtimeRoot(this), "etc/ca-certificates/cacert.pem").absolutePath
+        if (File(caCertPath).exists()) {
+            env["SSL_CERT_FILE"] = caCertPath
+            env["GIT_SSL_CAINFO"] = caCertPath
+            env["NODE_EXTRA_CA_CERTS"] = caCertPath
+            env["CURL_CA_BUNDLE"] = caCertPath
+        }
+
+        // npm: disable symlinks (Android sandbox restricts symlink creation)
+        env["npm_config_bin_links"] = "false"
+
+        // Terminal: set TERM so programs detect terminal capabilities through the real PTY
+        env["TERM"] = "xterm-256color"
+        env["COLORTERM"] = "truecolor"
+
         return builder
     }
 

@@ -198,10 +198,30 @@ export class BuiltinThemeProvider {
         editorTheme: 'hc-theia-light' // loaded in /packages/monaco/src/browser/textmate/monaco-theme-registry.ts
     };
 
+    static readonly dpDarkTheme: Theme = {
+        id: 'dp-dark',
+        type: 'dark',
+        label: 'DP Dark',
+        editorTheme: 'dp-dark',
+        activate(): void { document.body.setAttribute('data-dp-theme', 'dp-dark'); },
+        deactivate(): void { document.body.removeAttribute('data-dp-theme'); }
+    };
+
+    static readonly dpLightTheme: Theme = {
+        id: 'dp-light',
+        type: 'light',
+        label: 'DP Light',
+        editorTheme: 'dp-light',
+        activate(): void { document.body.setAttribute('data-dp-theme', 'dp-light'); },
+        deactivate(): void { document.body.removeAttribute('data-dp-theme'); }
+    };
+
     static readonly themes = [
         BuiltinThemeProvider.darkTheme,
         BuiltinThemeProvider.lightTheme,
         BuiltinThemeProvider.hcTheme,
-        BuiltinThemeProvider.hcLightTheme
+        BuiltinThemeProvider.hcLightTheme,
+        BuiltinThemeProvider.dpDarkTheme,
+        BuiltinThemeProvider.dpLightTheme
     ];
 }

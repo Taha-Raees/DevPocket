@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { mkdirSync, cpSync, existsSync, rmSync, writeFileSync, readdirSync, statSync, unlinkSync } from 'node:fs';
+import { mkdirSync, cpSync, existsSync, rmSync, writeFileSync, readdirSync, statSync, unlinkSync, readlinkSync, lstatSync, copyFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -30,6 +30,33 @@ const ovsxRouterSrc = path.resolve(productRoot, 'configs', 'ovsx-router-config.j
 // Termux-compatible binary paths
 const termuxBinDir = path.resolve(repoRoot, 'runtime', 'bin', `android-${arch}`);
 const termuxLibDir = path.resolve(repoRoot, 'runtime', 'lib', `android-${arch}`);
+
+function resolveSymlinks(dir) {
+    const entries = readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+        const entryPath = path.resolve(dir, entry.name);
+        if (entry.isDirectory()) {
+            resolveSymlinks(entryPath);
+            continue;
+        }
+        try {
+            const stats = lstatSync(entryPath);
+            if (stats.isSymbolicLink()) {
+                const target = readlinkSync(entryPath);
+                const resolvedTarget = path.resolve(dir, target);
+                if (existsSync(resolvedTarget)) {
+                    unlinkSync(entryPath);
+                    copyFileSync(resolvedTarget, entryPath);
+                } else {
+                    console.warn(`Removing broken symlink: ${entryPath} -> ${target}`);
+                    unlinkSync(entryPath);
+                }
+            }
+        } catch (e) {
+            console.warn(`Failed to resolve symlink ${entryPath}: ${e.message}`);
+        }
+    }
+}
 
 function cleanIncompatibleAssets(rootDir) {
     if (!existsSync(rootDir)) return;
@@ -153,6 +180,14 @@ if (existsSync(termuxBinDir)) {
     console.log(`Copying Termux binaries from ${termuxBinDir}`);
     cpSync(termuxBinDir, binOut, { recursive: true });
 
+    // Resolve symlinks in git-core: Android AssetManager can't handle symlinks.
+    // Most git subcommands (git-checkout, git-diff, etc.) are symlinks to the main git binary.
+    const gitCoreDir = path.resolve(binOut, 'libexec', 'git-core');
+    if (existsSync(gitCoreDir)) {
+        resolveSymlinks(gitCoreDir);
+        console.log('Resolved symlinks in libexec/git-core for Android compatibility');
+    }
+
     // Generate node-wrapper to circumvent Android 10+ stripping LD_LIBRARY_PATH
     // for binaries executed from the data directory.
     const nodeWrapperContent = `#!/system/bin/sh
@@ -189,6 +224,36 @@ fi
 `;
     writeFileSync(path.resolve(binOut, 'sh'), shWrapperContent, { mode: 0o755 });
     console.log(`Generated bin/sh script to redirect execa to bash`);
+
+    // Generate improved bash wrapper with proper initialization
+    const bashWrapperContent = `#!/system/bin/sh
+DIR="$(cd "$(dirname "$0")" && pwd)"
+LIB_DIR="$(cd "$DIR/../lib" && pwd)"
+export PATH="$DIR:$PATH"
+export LD_LIBRARY_PATH="$LIB_DIR\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
+export PS1='\\[\\033[01;32m\\]devpocket\\[\\033[00m\\]:\\[\\033[01;34m\\]\\w\\[\\033[00m\\]\\$ '
+export HISTFILE="\$HOME/.bash_history"
+export HISTSIZE=1000
+export HISTFILESIZE=2000
+
+# Set up git exec path so git subcommands work
+export GIT_EXEC_PATH="$DIR/libexec/git-core"
+
+# npm: disable bin-links to avoid EACCES on symlink creation
+export npm_config_bin_links=false
+
+exec "$DIR/bash.real" --noprofile --norc "$@"
+`;
+    writeFileSync(path.resolve(binOut, 'bash'), bashWrapperContent, { mode: 0o755 });
+    console.log('Generated improved bin/bash wrapper');
+
+    // Create a no-op spawn-helper for node-pty compatibility.
+    // On Linux/Android, forkpty() is used directly and spawn-helper is NOT called.
+    // This file exists only to prevent any file-not-found errors during module init.
+    const backendBuildDir = path.resolve(backendOut, 'build', 'Release');
+    mkdirSync(backendBuildDir, { recursive: true });
+    writeFileSync(path.resolve(backendBuildDir, 'spawn-helper'), '#!/system/bin/sh\nexec "$@"\n', { mode: 0o755 });
+    console.log('Created no-op spawn-helper for node-pty compatibility');
 } else {
     console.warn(`WARNING: Termux binary dir not found at ${termuxBinDir}`);
     console.warn('         Run: ./scripts/download-node-android.sh ' + arch);
@@ -200,6 +265,26 @@ if (existsSync(termuxLibDir)) {
     cpSync(termuxLibDir, libOut, { recursive: true });
 } else {
     console.warn(`WARNING: Termux lib dir not found at ${termuxLibDir}`);
+}
+
+// Bundle CA certificates for SSL/TLS (git clone, npm install, curl, etc.)
+const caCertOut = path.resolve(runtimeOut, 'etc', 'ca-certificates');
+mkdirSync(caCertOut, { recursive: true });
+const caCertSrc = path.resolve(repoRoot, 'runtime', 'etc', 'cacert.pem');
+if (existsSync(caCertSrc)) {
+    cpSync(caCertSrc, path.resolve(caCertOut, 'cacert.pem'));
+    console.log('Copied CA certificate bundle to runtime/etc/ca-certificates/');
+} else {
+    // Try system cert bundle as fallback
+    const systemCert = '/etc/ssl/certs/ca-certificates.crt';
+    if (existsSync(systemCert)) {
+        cpSync(systemCert, path.resolve(caCertOut, 'cacert.pem'));
+        console.log('Copied system CA certificates to runtime/etc/ca-certificates/');
+    } else {
+        console.warn('WARNING: No CA certificate bundle found. SSL operations may fail.');
+        console.warn('         Place a cacert.pem at runtime/etc/cacert.pem');
+        console.warn('         Download from: https://curl.se/ca/cacert.pem');
+    }
 }
 
 // Bundle pre-installed extensions (VSIX files) so they are available on first launch

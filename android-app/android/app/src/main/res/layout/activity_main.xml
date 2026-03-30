@@ -13,7 +13,7 @@
         android:id="@+id/loadingOverlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#1E1E2E"
+        android:background="#1A1A2E"
         android:gravity="center"
         android:orientation="vertical"
         android:padding="32dp">
@@ -21,7 +21,7 @@
         <ImageView
             android:layout_width="80dp"
             android:layout_height="80dp"
-            android:src="@mipmap/ic_launcher"
+            android:src="@drawable/dp_logo_iv"
             android:contentDescription="@string/app_name"
             android:layout_marginBottom="24dp" />
 

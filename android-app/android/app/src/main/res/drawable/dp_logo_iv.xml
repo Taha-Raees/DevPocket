@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="80dp"
+    android:height="80dp"
+    android:viewportWidth="80"
+    android:viewportHeight="80">
+
+    <!-- Dark background circle -->
+    <path
+        android:pathData="M40,40m-40,0a40,40 0 1,0 80,0a40,40 0 1,0 -80,0"
+        android:fillColor="#1A1A2E" />
+
+    <!-- Yellow outer ring -->
+    <path
+        android:pathData="M40,40m-36,0a36,36 0 1,0 72,0a36,36 0 1,0 -72,0"
+        android:fillColor="#F5C518" />
+
+    <!-- Inner dark circle (makes ring) -->
+    <path
+        android:pathData="M40,40m-28,0a28,28 0 1,0 56,0a28,28 0 1,0 -56,0"
+        android:fillColor="#1A1A2E" />
+
+    <!-- "D" left vertical bar -->
+    <path
+        android:pathData="M20,24 L24,24 L24,56 L20,56 Z"
+        android:fillColor="#F5C518" />
+
+    <!-- "D" curved right side (approximated with rect + corners) -->
+    <path
+        android:pathData="M23,24 L32,24 Q42,24 42,40 Q42,56 32,56 L23,56 Z"
+        android:fillColor="#F5C518" />
+
+    <!-- Inner cutout for D -->
+    <path
+        android:pathData="M26,28 L31,28 Q37,28 37,40 Q37,52 31,52 L26,52 Z"
+        android:fillColor="#1A1A2E" />
+
+    <!-- "P" left vertical bar -->
+    <path
+        android:pathData="M46,24 L50,24 L50,56 L46,56 Z"
+        android:fillColor="#F5C518" />
+
+    <!-- "P" bump top half -->
+    <path
+        android:pathData="M49,24 L56,24 Q62,24 62,32 Q62,40 56,40 L49,40 Z"
+        android:fillColor="#F5C518" />
+
+    <!-- Inner cutout for P bump -->
+    <path
+        android:pathData="M52,27 L55,27 Q58,27 58,32 Q58,37 55,37 L52,37 Z"
+        android:fillColor="#1A1A2E" />
+
+</vector>

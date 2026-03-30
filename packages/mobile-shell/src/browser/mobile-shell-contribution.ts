@@ -284,7 +284,7 @@ export class MobileShellContribution implements FrontendApplicationContribution,
             let bottomPanel: HTMLElement | null = null;
             const statusBarHeight = 22;
             const handleHeight = 20;
-            const minCollapsedHeight = 5;
+            const minCollapsedHeight = 0;
 
             const onTouchStart = (e: TouchEvent) => {
                 bottomPanel = splitPanel.querySelector('#theia-bottom-content-panel') as HTMLElement | null;
