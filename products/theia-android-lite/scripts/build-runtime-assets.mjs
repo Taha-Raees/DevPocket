@@ -234,19 +234,25 @@ exec "$DIR/rg.bin" "$@"
 
 cpSync(ovsxRouterSrc, path.resolve(configOut, 'ovsx-router-config.json'));
 
-// Copy Termux node binary and npm
+// Copy only essential Termux binaries (git/npm/python installed via apt in Debian)
 if (existsSync(termuxBinDir)) {
-    console.log(`Copying Termux binaries from ${termuxBinDir}`);
-    cpSync(termuxBinDir, binOut, { recursive: true });
-    await ensureProotBinary();
-
-    // Resolve symlinks in git-core: Android AssetManager can't handle symlinks.
-    // Most git subcommands (git-checkout, git-diff, etc.) are symlinks to the main git binary.
-    const gitCoreDir = path.resolve(binOut, 'libexec', 'git-core');
-    if (existsSync(gitCoreDir)) {
-        resolveSymlinks(gitCoreDir);
-        console.log('Resolved symlinks in libexec/git-core for Android compatibility');
+    console.log(`Copying essential Termux binaries from ${termuxBinDir}`);
+    
+    // Only these binaries are needed for the Theia backend to run on the host
+    const essentialBinaries = ['node', 'bash', 'bash.real'];
+    
+    for (const bin of essentialBinaries) {
+        const src = path.resolve(termuxBinDir, bin);
+        if (existsSync(src)) {
+            cpSync(src, path.resolve(binOut, bin));
+            chmodSync(path.resolve(binOut, bin), 0o755);
+            console.log(`  Copied ${bin}`);
+        } else {
+            console.warn(`  WARNING: Essential binary not found: ${src}`);
+        }
     }
+    
+    await ensureProotBinary();
 
     // Generate node-wrapper to circumvent Android 10+ stripping LD_LIBRARY_PATH
     // for binaries executed from the data directory.
@@ -295,12 +301,6 @@ export PS1='\\[\\033[01;32m\\]devpocket\\[\\033[00m\\]:\\[\\033[01;34m\\]\\w\\[\
 export HISTFILE="\$HOME/.bash_history"
 export HISTSIZE=1000
 export HISTFILESIZE=2000
-
-# Set up git exec path so git subcommands work
-export GIT_EXEC_PATH="$DIR/libexec/git-core"
-
-# npm: disable bin-links to avoid EACCES on symlink creation
-export npm_config_bin_links=false
 
 exec "$DIR/bash.real" --noprofile --norc "$@"
 `;

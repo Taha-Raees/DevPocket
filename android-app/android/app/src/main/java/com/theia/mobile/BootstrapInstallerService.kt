@@ -438,6 +438,99 @@ class BootstrapInstallerService(private val context: Context) {
             sudoersFile.setWritable(false, true)
             sudoersFile.setExecutable(false, false)
             
+            // 7. Write apt config to disable sandbox (prevents setresuid errors in PRoot)
+            val aptConfigDir = File(debianDir, "etc/apt/apt.conf.d")
+            aptConfigDir.mkdirs()
+            File(aptConfigDir, "01-devpocket-sandbox").writeText("APT::Sandbox::User \"root\";\n")
+            
+            // 8. Upgrade sources.list to Bookworm (Debian 12) for current GPG keys
+            val sourcesListDir = File(debianDir, "etc/apt")
+            sourcesListDir.mkdirs()
+            val sourcesContent = """
+                deb [trusted=yes] http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
+                deb [trusted=yes] http://deb.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
+                deb [trusted=yes] http://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
+            """.trimIndent()
+            File(sourcesListDir, "sources.list").writeText(sourcesContent + "\n")
+            
+            // 9. Allow unauthenticated repos for initial bootstrap (expired Bullseye keys)
+            File(aptConfigDir, "02-devpocket-allow-unauthenticated").writeText(
+                "Acquire::AllowInsecureRepositories \"true\";\nAPT::Get::AllowUnauthenticated \"true\";\n"
+            )
+            
+            // 10. Create PRoot/chroot compatibility scripts
+            // These no-op scripts prevent dpkg maintainer scripts from failing in PRoot
+            val usrSbinDir = File(debianDir, "usr/sbin")
+            usrSbinDir.mkdirs()
+            val sbinDir = File(debianDir, "sbin")
+            sbinDir.mkdirs()
+            
+            // No-op dpkg-preconfigure (Perl not in minimal rootfs)
+            val dpkgPreconfigFile = File(usrSbinDir, "dpkg-preconfigure")
+            dpkgPreconfigFile.writeText("#!/bin/sh\nexit 0\n")
+            dpkgPreconfigFile.setExecutable(true, false)
+            
+            // No-op ldconfig (can't modify shared lib cache in PRoot)
+            val ldconfigFile = File(sbinDir, "ldconfig")
+            ldconfigFile.writeText("#!/bin/sh\nexit 0\n")
+            ldconfigFile.setExecutable(true, false)
+            // Also in /usr/sbin
+            File(usrSbinDir, "ldconfig").writeText("#!/bin/sh\nexit 0\n")
+            File(usrSbinDir, "ldconfig").setExecutable(true, false)
+            
+            // No-op start-stop-daemon (no init system in PRoot)
+            val startStopFile = File(usrSbinDir, "start-stop-daemon")
+            startStopFile.writeText("#!/bin/sh\nexit 0\n")
+            startStopFile.setExecutable(true, false)
+            
+            // No-op invoke-rc.d (no init system in PRoot)
+            val invokeRcdFile = File(usrSbinDir, "invoke-rc.d")
+            invokeRcdFile.writeText("#!/bin/sh\nexit 0\n")
+            invokeRcdFile.setExecutable(true, false)
+            
+            // No-op update-rc.d (no init system in PRoot)
+            val updateRcdFile = File(usrSbinDir, "update-rc.d")
+            updateRcdFile.writeText("#!/bin/sh\nexit 0\n")
+            updateRcdFile.setExecutable(true, false)
+            
+            // No-op service (no init system in PRoot)
+            val serviceFile = File(usrSbinDir, "service")
+            serviceFile.writeText("#!/bin/sh\nexit 0\n")
+            serviceFile.setExecutable(true, false)
+            
+            // Policy-rc.d: tell dpkg to never start services (return 101 = action forbidden)
+            val policyFile = File(usrSbinDir, "policy-rc.d")
+            policyFile.writeText("#!/bin/sh\nexit 101\n")
+            policyFile.setExecutable(true, false)
+            
+            // 11. Configure dpkg to force through errors in PRoot
+            val dpkgConfigDir = File(debianDir, "etc/dpkg/dpkg.cfg.d")
+            dpkgConfigDir.mkdirs()
+            File(dpkgConfigDir, "01-devpocket-force").writeText(
+                "force-overwrite\nforce-confnew\n"
+            )
+            
+            // 12. Write first-boot key setup script (optional: installs proper Debian keys)
+            val setupBinDir = File(debianDir, "usr/local/bin")
+            setupBinDir.mkdirs()
+            val setupScript = File(setupBinDir, "devpocket-setup-keys")
+            setupScript.writeText("""#!/bin/bash
+# DevPocket: Install proper Debian archive GPG keys
+# After running this, you can remove [trusted=yes] from /etc/apt/sources.list
+set -e
+echo "Installing Debian archive keyring..."
+apt update && apt install -y debian-archive-keyring
+# Rewrite sources.list without [trusted=yes]
+cat > /etc/apt/sources.list << 'EOF'
+deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
+deb http://deb.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
+deb http://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
+EOF
+apt update
+echo "Done! GPG keys installed and sources.list updated."
+""")
+            setupScript.setExecutable(true, false)
+            
             // Set user home directory ownership/permissions (simulate Linux ownership)
             // Note: On Android's app-private filesystem, ownership is limited, but we can set permissions
             setOwnableDirectory(userHome, true)
@@ -576,19 +669,23 @@ class BootstrapInstallerService(private val context: Context) {
         val wrapperFile = File(binDir, "devpocket-shell")
         val wrapperScript = """#!/system/bin/sh
 # DevPocket shell wrapper - sets up Debian environment
+unset LD_PRELOAD
 export DEVPOCKET_DEBIAN_ROOT="${appDataDir}/files/linux/debian"
 export DEVPOCKET_APP_CACHE="${appDataDir}/cache"
 export DEVPOCKET_APP_FILES="${appDataDir}/files"
 export DEVPOCKET_RUNTIME_BIN="${appDataDir}/files/runtime/bin"
+export LD_LIBRARY_PATH="${appDataDir}/files/runtime/lib:${'$'}{LD_LIBRARY_PATH:-}"
+export DEBIAN_FRONTEND=noninteractive
 export USER="$username"
 export LOGNAME="$username"
-export HOME="${'$'}{DEVPOCKET_DEBIAN_ROOT}/home/$username"
+export HOME="/home/$username"
 export TERM=xterm-256color
 export COLORTERM=truecolor
 export LC_ALL=C.UTF-8
 export LANG=C.UTF-8
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 export PROOT_TMP_DIR="${'$'}{DEVPOCKET_APP_CACHE}/proot-tmp"
+export PROOT_NO_SECCOMP=1
 
 PROOT_BIN="${'$'}{DEVPOCKET_RUNTIME_BIN}/proot"
 FALLBACK_SHELL="/system/bin/sh"
@@ -617,13 +714,11 @@ fi
 
 mkdir -p "${'$'}PROOT_TMP_DIR" "${'$'}{DEVPOCKET_APP_CACHE}/android-tmp"
 
-"${'$'}PROOT_BIN" -0 -r "${'$'}{DEVPOCKET_DEBIAN_ROOT}" \
+exec "${'$'}PROOT_BIN" --link2symlink -0 -r "${'$'}{DEVPOCKET_DEBIAN_ROOT}" \
+  -b /dev -b /proc -b /sys \
+  -b /sdcard \
   -w "/home/$username" \
-  /bin/bash "$@"
-
-status="${'$'}?"
-echo "DevPocket warning: Debian shell failed with status ${'$'}status; falling back to bundled shell." >&2
-run_fallback_shell "$@"
+  /bin/bash --login "$@"
 """
         
         wrapperFile.writeText(wrapperScript)

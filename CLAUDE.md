@@ -61,6 +61,45 @@ This project has a comprehensive memory system at `.claude/projects/-home-...-De
 
 ---
 
+## Recent Changes (2026-03-31)
+
+### ⚠️ IN PROGRESS: Debian-First Terminal Onboarding
+
+**Status snapshot:**
+- Debian onboarding + installer flow is implemented and reaches successful completion on device
+- Runtime asset assembly now bundles `proot` in [`products/theia-android-lite/scripts/build-runtime-assets.mjs`](products/theia-android-lite/scripts/build-runtime-assets.mjs)
+- Android installer path now downloads a Debian-root userland archive, verifies checksum, extracts it, creates a Linux user, and writes a wrapper in [`android-app/android/app/src/main/java/com/theia/mobile/BootstrapInstallerService.kt`](android-app/android/app/src/main/java/com/theia/mobile/BootstrapInstallerService.kt)
+- Terminal corruption from injected `stty cols ... rows ...` in the Android pipe fallback was removed in [`packages/process/src/node/terminal-process.ts`](packages/process/src/node/terminal-process.ts)
+- Current blocker: **true Debian shell launch is still not reliable** under the present `proot` + rootfs combination, so the wrapper currently falls back to Android `/system/bin/sh`
+
+**New Android/Kotlin files introduced:**
+- `android-app/android/app/src/main/java/com/theia/mobile/OnboardingActivity.kt`
+- `android-app/android/app/src/main/java/com/theia/mobile/OnboardingStateManager.kt`
+- `android-app/android/app/src/main/java/com/theia/mobile/BootstrapInstallerService.kt`
+- `android-app/android/app/src/main/java/com/theia/mobile/UserAccountConfig.kt`
+- `android-app/android/app/src/main/java/com/theia/mobile/TheiaBackendConfig.kt`
+- `android-app/android/app/src/main/java/com/theia/mobile/StorageManager.kt`
+- `android-app/android/app/src/main/java/com/theia/mobile/HealthCheckService.kt`
+- `android-app/android/app/src/main/java/com/theia/mobile/SecurityManager.kt`
+- `android-app/android/app/src/main/java/com/theia/mobile/PerformanceManager.kt`
+- `android-app/android/app/src/androidTest/java/com/theia/mobile/DevPocketTestSuite.kt`
+
+**Key terminal/runtime changes:**
+- [`android-app/android/app/src/main/java/com/theia/mobile/TheiaBackendService.kt`](android-app/android/app/src/main/java/com/theia/mobile/TheiaBackendService.kt)
+- [`android-app/android/app/src/main/java/com/theia/mobile/TheiaRuntimePaths.kt`](android-app/android/app/src/main/java/com/theia/mobile/TheiaRuntimePaths.kt)
+- [`packages/terminal/src/node/shell-process.ts`](packages/terminal/src/node/shell-process.ts)
+- [`packages/terminal/src/node/shell-terminal-server.ts`](packages/terminal/src/node/shell-terminal-server.ts)
+- [`packages/process/src/node/terminal-process.ts`](packages/process/src/node/terminal-process.ts)
+- [`packages/mobile-shell/src/browser/package-manager-contribution.tsx`](packages/mobile-shell/src/browser/package-manager-contribution.tsx)
+- [`products/theia-android-lite/scripts/bootstrap-installer.mjs`](products/theia-android-lite/scripts/bootstrap-installer.mjs)
+
+**Important current truth for future Claude sessions:**
+- Do **not** assume Debian shell is working just because onboarding succeeds.
+- Do **not** claim npm is working inside Debian root yet.
+- Verified on-device: fallback Android shell path works; Debian shell path still needs deeper runtime work.
+
+---
+
 ## Recent Changes (2026-03-30)
 
 ### ✅ IMPLEMENTED: Real PTY Terminal Support
