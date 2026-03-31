@@ -16,8 +16,10 @@
 
 import { ContainerModule } from 'inversify';
 import { CommandContribution } from '@theia/core';
+import { MenuContribution } from '@theia/core/lib/common/menu';
 import { FrontendApplicationContribution } from '@theia/core/lib/browser';
 import { MobileShellContribution } from './mobile-shell-contribution';
+import { PackageManagerContribution } from './package-manager-contribution';
 
 import '../../src/browser/style/mobile-shell.css';
 
@@ -25,4 +27,8 @@ export default new ContainerModule(bind => {
     bind(MobileShellContribution).toSelf().inSingletonScope();
     bind(CommandContribution).toService(MobileShellContribution);
     bind(FrontendApplicationContribution).toService(MobileShellContribution);
+
+    bind(PackageManagerContribution).toSelf().inSingletonScope();
+    bind(CommandContribution).toService(PackageManagerContribution);
+    bind(MenuContribution).toService(PackageManagerContribution);
 });

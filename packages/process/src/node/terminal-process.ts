@@ -136,10 +136,9 @@ class StreamTerminal implements IPty {
     resize(columns: number, rows: number): void {
         this._cols = columns;
         this._rows = rows;
-        // Forward resize to the shell via stty so tools can detect the new size
-        try {
-            this.child.stdin.write(`stty cols ${columns} rows ${rows} 2>/dev/null\n`);
-        } catch { /* ignore if stdin is closed */ }
+        // Intentionally avoid forwarding resize via `stty` on Android pipe-based
+        // terminals. Without a backing PTY the command is echoed into the buffer,
+        // producing visual corruption like `stty cols ...` appearing in the UI.
     }
 
     write(data: string): void {

@@ -136,10 +136,15 @@ class TheiaBackendService : Service() {
             throw IOException("Missing backend entrypoint at ${entry.absolutePath}")
         }
 
-        val devPocketWorkspace = File("/storage/emulated/0/Documents/DevPocket")
+        // Resolve IDE workspace location:
+        // 1. Primary: app-private Debian home (new model)
+        // 2. Fallback: external shared storage (legacy)
+        val devPocketWorkspace = TheiaRuntimePaths.getIdeWorkspace(this)
         if (!devPocketWorkspace.exists()) {
             devPocketWorkspace.mkdirs()
         }
+        
+        logLine("IDE workspace resolved to: ${devPocketWorkspace.absolutePath}")
 
         // Ensure bundled extensions from APK assets are extracted (unpacked) in the extensions directory.
         // Theia treats --plugins / THEIA_DEFAULT_PLUGINS as system plugins and system plugins
@@ -207,8 +212,22 @@ class TheiaBackendService : Service() {
         env["PATH"] = "$runtimeBin:$existingPath"
         env["LD_LIBRARY_PATH"] = runtimeLib
         env["HOME"] = devPocketWorkspace.absolutePath
+        
+        // Debian environment (available if onboarding complete)
+        val onboardingManager = OnboardingStateManager(this)
+        val onboardingConfig = onboardingManager.getConfig()
+        if (onboardingConfig.username != null) {
+            val debianRoot = File(filesDir, "linux/debian")
+            if (debianRoot.exists()) {
+                env["DEVPOCKET_DEBIAN_ROOT"] = debianRoot.absolutePath
+                env["DEVPOCKET_USER"] = onboardingConfig.username
+                env["DEVPOCKET_WORKSPACE"] = devPocketWorkspace.absolutePath
+            }
+        }
+        
         env["THEIA_DEFAULT_PLUGINS"] = "local-dir:${TheiaRuntimePaths.extensionsRoot(this).absolutePath}"
         env["THEIA_PLUGINS"] = "local-dir:${TheiaRuntimePaths.extensionsRoot(this).absolutePath}"
+        env.putAll(TheiaBackendConfig.getBackendEnvironmentVariables(this))
         env["THEIA_ANDROID_LITE"] = "1"
         env["THEIA_ANDROID_LITE_HOME"] = filesDir.absolutePath
         env["THEIA_CONFIG_DIR"] = TheiaRuntimePaths.configDir(this).absolutePath
@@ -223,10 +242,11 @@ class TheiaBackendService : Service() {
         val termuxBash = File(runtimeBin, "bash")
         val termuxSh = File(runtimeBin, "sh")
         val resolvedShell = if (termuxBash.exists()) termuxBash.absolutePath else if (termuxSh.exists()) termuxSh.absolutePath else "/system/bin/sh"
-        env["SHELL"] = resolvedShell
-        env["THEIA_SHELL"] = resolvedShell
-        env["npm_config_script_shell"] = resolvedShell
-        env["npm_config_shell"] = resolvedShell
+        val effectiveShell = env["THEIA_SHELL"]?.takeIf { it.isNotBlank() } ?: resolvedShell
+        env["SHELL"] = effectiveShell
+        env["THEIA_SHELL"] = effectiveShell
+        env["npm_config_script_shell"] = effectiveShell
+        env["npm_config_shell"] = effectiveShell
         // Fix webview rendering: use same-origin pattern instead of subdomain-based
         env["THEIA_WEBVIEW_EXTERNAL_ENDPOINT"] = "{{hostname}}"
         // Android strict inotify limits cause "Unable to watch for file changes"

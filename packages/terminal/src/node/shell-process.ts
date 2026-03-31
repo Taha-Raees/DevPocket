@@ -81,6 +81,23 @@ export class ShellProcess extends TerminalProcess {
         if (shell) {
             return shell;
         }
+
+        // Android/Debian Detection: Use wrapper script if Debian runtime is available
+        if (process.env.DEVPOCKET_DEBIAN_ROOT) {
+            const path = require('path');
+            const debianBin = path.join(process.env.DEVPOCKET_DEBIAN_ROOT, 'bin', 'devpocket-shell');
+            try {
+                // Check if wrapper exists and is executable
+                const fs = require('fs');
+                const stats = fs.statSync(debianBin);
+                if (stats.isFile() && (stats.mode & 0o100)) {
+                    return debianBin;
+                }
+            } catch (e) {
+                // Fallback if wrapper not found
+            }
+        }
+
         if (isWindows) {
             return 'cmd.exe';
         } else {
@@ -93,6 +110,12 @@ export class ShellProcess extends TerminalProcess {
         if (args) {
             return parseArgs(args);
         }
+
+        // Android/Debian: No special args needed for wrapper script
+        if (process.env.DEVPOCKET_DEBIAN_ROOT) {
+            return [];
+        }
+
         if (isOSX) {
             return ['-l'];
         } else {

@@ -15,3 +15,4 @@
 // *****************************************************************************
 
 export * from './mobile-shell-contribution';
+export * from './package-manager-contribution';

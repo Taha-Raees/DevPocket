@@ -60,6 +60,21 @@ export class ShellTerminalServer extends BaseTerminalServer implements IShellTer
         try {
             if (options.strictEnv !== true) {
                 options.env = this.environmentUtils.mergeProcessEnv(options.env);
+
+                // Android/Debian Integration: Pass Debian environment variables from backend
+                // These are set by TheiaBackendService.kt and allow terminal to detect Debian
+                if (process.env.DEVPOCKET_DEBIAN_ROOT) {
+                    options.env.DEVPOCKET_DEBIAN_ROOT = process.env.DEVPOCKET_DEBIAN_ROOT;
+                    options.env.DEVPOCKET_USER = process.env.DEVPOCKET_USER || 'devpocket';
+                    options.env.DEVPOCKET_WORKSPACE = process.env.DEVPOCKET_WORKSPACE || '/home/devpocket/code';
+
+                    // Terminal capabilities for Debian sessions
+                    options.env.TERM = 'xterm-256color';
+                    options.env.COLORTERM = 'truecolor';
+                    options.env.LC_ALL = 'C.UTF-8';
+                    options.env.LANG = 'C.UTF-8';
+                }
+
                 this.applyToProcessEnvironment(URI.fromFilePath(getRootPath(options.rootURI)), options.env);
             }
             const term = this.shellFactory(options);

@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 
-import { mkdirSync, cpSync, existsSync, rmSync, writeFileSync, readdirSync, statSync, unlinkSync, readlinkSync, lstatSync, copyFileSync } from 'node:fs';
+import { mkdirSync, cpSync, existsSync, rmSync, writeFileSync, readdirSync, statSync, unlinkSync, readlinkSync, lstatSync, copyFileSync, chmodSync, createWriteStream } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import https from 'node:https';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -30,6 +31,64 @@ const ovsxRouterSrc = path.resolve(productRoot, 'configs', 'ovsx-router-config.j
 // Termux-compatible binary paths
 const termuxBinDir = path.resolve(repoRoot, 'runtime', 'bin', `android-${arch}`);
 const termuxLibDir = path.resolve(repoRoot, 'runtime', 'lib', `android-${arch}`);
+
+async function downloadExecutable(url, destination) {
+    await new Promise((resolve, reject) => {
+        const file = createWriteStream(destination, { mode: 0o755 });
+        https.get(url, response => {
+            if (response.statusCode !== 200) {
+                reject(new Error(`Failed downloading ${url}: HTTP ${response.statusCode}`));
+                response.resume();
+                return;
+            }
+
+            response.pipe(file);
+            file.on('finish', () => {
+                file.close(resolve);
+            });
+        }).on('error', error => {
+            reject(error);
+        });
+    });
+
+    chmodSync(destination, 0o755);
+}
+
+async function ensureProotBinary() {
+    const packagedProotPath = path.resolve(termuxBinDir, 'proot');
+    const envProotPath = process.env.ANDROID_PROOT_BIN ? path.resolve(process.env.ANDROID_PROOT_BIN) : '';
+    const defaultProotUrls = {
+        aarch64: 'https://skirsten.github.io/proot-portable-android-binaries/aarch64/proot',
+        x86_64: 'https://skirsten.github.io/proot-portable-android-binaries/x86_64/proot'
+    };
+    const envProotUrl = process.env.ANDROID_PROOT_URL || defaultProotUrls[arch];
+    const outputPath = path.resolve(binOut, 'proot');
+
+    if (existsSync(packagedProotPath)) {
+        copyFileSync(packagedProotPath, outputPath);
+        chmodSync(outputPath, 0o755);
+        console.log(`Copied packaged proot from ${packagedProotPath}`);
+        return;
+    }
+
+    if (envProotPath && existsSync(envProotPath)) {
+        copyFileSync(envProotPath, outputPath);
+        chmodSync(outputPath, 0o755);
+        console.log(`Copied proot from ANDROID_PROOT_BIN=${envProotPath}`);
+        return;
+    }
+
+    if (envProotUrl) {
+        console.log(`Downloading proot from ANDROID_PROOT_URL=${envProotUrl}`);
+        await downloadExecutable(envProotUrl, outputPath);
+        return;
+    }
+
+    throw new Error(
+        `Missing Android proot binary for arch ${arch}. ` +
+        `Provide runtime/bin/android-${arch}/proot, set ANDROID_PROOT_BIN, or set ANDROID_PROOT_URL.`
+    );
+}
 
 function resolveSymlinks(dir) {
     const entries = readdirSync(dir, { withFileTypes: true });
@@ -179,6 +238,7 @@ cpSync(ovsxRouterSrc, path.resolve(configOut, 'ovsx-router-config.json'));
 if (existsSync(termuxBinDir)) {
     console.log(`Copying Termux binaries from ${termuxBinDir}`);
     cpSync(termuxBinDir, binOut, { recursive: true });
+    await ensureProotBinary();
 
     // Resolve symlinks in git-core: Android AssetManager can't handle symlinks.
     // Most git subcommands (git-checkout, git-diff, etc.) are symlinks to the main git binary.

@@ -36,6 +36,17 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Check if onboarding is required
+        val onboardingManager = OnboardingStateManager(this)
+        if (!onboardingManager.isOnboardingComplete()) {
+            // Launch onboarding flow
+            val intent = Intent(this, OnboardingActivity::class.java)
+            startActivity(intent)
+            finish()
+            return
+        }
+
         setContentView(R.layout.activity_main)
 
         webView = findViewById(R.id.webView)
