@@ -2,7 +2,7 @@ name: Build & Release APK
 
 on:
   push:
-    branches: [ main, master, dev ]
+    branches: [ main, master, dev, 'session/**' ]
   pull_request:
     branches: [ main, master ]
   workflow_dispatch:
