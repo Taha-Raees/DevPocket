@@ -487,19 +487,21 @@ class BootstrapInstallerService(private val context: Context) {
             aptConfigDir.mkdirs()
             File(aptConfigDir, "01-devpocket-sandbox").writeText("APT::Sandbox::User \"root\";\n")
             
-            // 8. Upgrade sources.list to Bookworm (Debian 12) for current GPG keys
+            // 8. Write sources.list pointing to archive.debian.org (bullseye is EOL, moved off deb.debian.org)
             val sourcesListDir = File(debianDir, "etc/apt")
             sourcesListDir.mkdirs()
             val sourcesContent = """
-                deb [trusted=yes] http://deb.debian.org/debian bullseye main contrib non-free
-                deb [trusted=yes] http://deb.debian.org/debian-security bullseye-security main contrib
-                deb [trusted=yes] http://deb.debian.org/debian bullseye-updates main contrib
+                deb [trusted=yes] http://archive.debian.org/debian bullseye main contrib non-free
+                deb [trusted=yes] http://archive.debian.org/debian-security bullseye-security main
+                deb [trusted=yes] http://archive.debian.org/debian bullseye-updates main contrib
             """.trimIndent()
             File(sourcesListDir, "sources.list").writeText(sourcesContent + "\n")
             
-            // 9. Allow unauthenticated repos for initial bootstrap (expired Bullseye keys)
+            // 9. Allow unauthenticated repos + disable expiry check (bullseye is EOL, Release file is expired)
             File(aptConfigDir, "02-devpocket-allow-unauthenticated").writeText(
-                "Acquire::AllowInsecureRepositories \"true\";\nAPT::Get::AllowUnauthenticated \"true\";\n"
+                "Acquire::AllowInsecureRepositories \"true\";\n" +
+                "APT::Get::AllowUnauthenticated \"true\";\n" +
+                "Acquire::Check-Valid-Until \"false\";\n"
             )
             
             // 10. Create PRoot/chroot compatibility scripts
@@ -566,9 +568,9 @@ echo "Installing Debian archive keyring..."
 apt update && apt install -y debian-archive-keyring
 # Rewrite sources.list without [trusted=yes]
 cat > /etc/apt/sources.list << 'EOF'
-deb http://deb.debian.org/debian bullseye main contrib non-free
-deb http://deb.debian.org/debian-security bullseye-security main contrib
-deb http://deb.debian.org/debian bullseye-updates main contrib
+deb http://archive.debian.org/debian bullseye main contrib non-free
+deb http://archive.debian.org/debian-security bullseye-security main
+deb http://archive.debian.org/debian bullseye-updates main contrib
 EOF
 apt update
 echo "Done! GPG keys installed and sources.list updated."
@@ -828,14 +830,14 @@ if [ -f "${'$'}GPGV_BIN" ]; then
   esac
 fi
 
-# 3) Write sources.list with [trusted=yes]
+# 3) Write sources.list pointing to archive.debian.org (bullseye is EOL, moved off deb.debian.org)
 cat > "${'$'}{DEBIAN_ROOT}/etc/apt/sources.list" << 'SOURCES_EOF'
-deb [trusted=yes] http://deb.debian.org/debian bullseye main contrib non-free
-deb [trusted=yes] http://deb.debian.org/debian-security bullseye-security main contrib
-deb [trusted=yes] http://deb.debian.org/debian bullseye-updates main contrib
+deb [trusted=yes] http://archive.debian.org/debian bullseye main contrib non-free
+deb [trusted=yes] http://archive.debian.org/debian-security bullseye-security main
+deb [trusted=yes] http://archive.debian.org/debian bullseye-updates main contrib
 SOURCES_EOF
 
-# 4) APT config: allow insecure repos
+# 4) APT config: allow insecure repos + disable expiry check (bullseye Release file is expired)
 mkdir -p "${'$'}{DEBIAN_ROOT}/etc/apt/apt.conf.d"
 cat > "${'$'}{DEBIAN_ROOT}/etc/apt/apt.conf.d/99allow-insecure" << 'APT_CONF_EOF'
 Acquire::AllowInsecureRepositories "true";
