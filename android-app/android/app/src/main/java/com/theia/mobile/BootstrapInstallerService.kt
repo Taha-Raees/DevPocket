@@ -730,6 +730,7 @@ export COLORTERM=truecolor
 export LC_ALL=C.UTF-8
 export LANG=C.UTF-8
 export PATH="${'$'}{DEVPOCKET_RUNTIME_BIN}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+export DPKG_NO_DEBSPLIT=1
 export PROOT_TMP_DIR="${'$'}{DEVPOCKET_APP_CACHE}/proot-tmp"
 export PROOT_NO_SECCOMP=1
 
@@ -944,6 +945,7 @@ exec "${'$'}PROOT_BIN" \
     LC_ALL=C.UTF-8 \
     DEBIAN_FRONTEND=noninteractive \
     PATH="${'$'}{DEVPOCKET_RUNTIME_BIN}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+    DPKG_NO_DEBSPLIT=1 \
     LD_PRELOAD="${'$'}PROOT_LD_PRELOAD" \
   /bin/bash ${'$'}_BASH_OPTS "$@"
 """
