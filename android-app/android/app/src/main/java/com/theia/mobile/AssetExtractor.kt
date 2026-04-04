@@ -11,10 +11,11 @@ object AssetExtractor {
 
     private const val TAG = "TheiaAssetExtractor"
     private const val ASSET_ROOT = "runtime"
-    private const val MARKER_FILE = ".runtime-extracted-v19"
+    private const val MARKER_FILE = ".runtime-extracted-v21"
 
     private val EXECUTABLE_BASENAMES = setOf(
-        "node", "node-wrapper", "npm", "npx", "rg", "git", "ssh", "busybox", "ps", "sh", "bash"
+        "node", "node-wrapper", "npm", "npx", "rg", "git", "ssh", "busybox", "ps", "sh", "bash",
+        "python3", "python3.real", "proot", "bash.real"
     )
 
     @Throws(IOException::class)
@@ -127,7 +128,10 @@ object AssetExtractor {
         val name = file.name
         if (name in EXECUTABLE_BASENAMES) return true
         if (name.endsWith(".so") || name.endsWith(".node")) return true
-        return file.parentFile?.name == "bin"
+        // All files in bin/ or git-core/ should be executable
+        val parentName = file.parentFile?.name
+        if (parentName == "bin" || parentName == "git-core") return true
+        return false
     }
 
     @Throws(IOException::class)

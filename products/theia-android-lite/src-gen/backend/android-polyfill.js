@@ -43,9 +43,14 @@ cp.spawnSync = function(command, args, options) {
 const originalUserInfo = os.userInfo;
 os.userInfo = function(options) {
     const info = originalUserInfo.call(this, options);
-    if (info && info.shell === '/data/data/com.termux/files/usr/bin/bash' || info.shell === '/data/data/com.termux/files/usr/bin/sh') {
-        info.shell = process.env.SHELL || '/system/bin/sh';
-    }
+    try {
+        if (info && info.shell && info.shell.includes('com.termux')) {
+            info.shell = process.env.SHELL || '/system/bin/sh';
+        }
+        if (info && info.homedir && info.homedir.includes('com.termux')) {
+            info.homedir = process.env.HOME || os.homedir();
+        }
+    } catch(e) {}
     return info;
 };
 
@@ -55,3 +60,12 @@ console.error('[android-lite][polyfill] shell diagnostics', {
     npmConfigShell: process.env.npm_config_shell,
     npmConfigScriptShell: process.env.npm_config_script_shell
 });
+
+const originalTmpdir = os.tmpdir;
+os.tmpdir = function() {
+    const tmp = originalTmpdir.call(this);
+    if (tmp && tmp.includes('com.termux')) {
+        return process.env.TMPDIR || '/data/local/tmp';
+    }
+    return tmp;
+};

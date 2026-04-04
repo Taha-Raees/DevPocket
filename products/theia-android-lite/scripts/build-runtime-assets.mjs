@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { mkdirSync, cpSync, existsSync, rmSync, writeFileSync, readdirSync, statSync, unlinkSync, readlinkSync, lstatSync, copyFileSync, chmodSync, createWriteStream } from 'node:fs';
+import { mkdirSync, cpSync, existsSync, rmSync, writeFileSync, readdirSync, statSync, unlinkSync, readlinkSync, lstatSync, copyFileSync, chmodSync, createWriteStream, readFileSync, renameSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import https from 'node:https';
@@ -35,7 +35,13 @@ const termuxLibDir = path.resolve(repoRoot, 'runtime', 'lib', `android-${arch}`)
 async function downloadExecutable(url, destination) {
     await new Promise((resolve, reject) => {
         const file = createWriteStream(destination, { mode: 0o755 });
-        https.get(url, response => {
+        const req = https.get(url, response => {
+            if (response.statusCode === 301 || response.statusCode === 302) {
+                // Follow one redirect level for GitHub releases etc.
+                file.close();
+                downloadExecutable(response.headers.location, destination).then(resolve, reject);
+                return;
+            }
             if (response.statusCode !== 200) {
                 reject(new Error(`Failed downloading ${url}: HTTP ${response.statusCode}`));
                 response.resume();
@@ -48,6 +54,10 @@ async function downloadExecutable(url, destination) {
             });
         }).on('error', error => {
             reject(error);
+        });
+        // Abort if the server stalls for more than 60 seconds
+        req.setTimeout(60000, () => {
+            req.destroy(new Error(`Download timed out after 60s: ${url}`));
         });
     });
 
@@ -117,6 +127,36 @@ function resolveSymlinks(dir) {
     }
 }
 
+function fixTermuxShebangs(dir) {
+    const entries = readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+        const entryPath = path.resolve(dir, entry.name);
+        if (entry.isDirectory()) {
+            fixTermuxShebangs(entryPath);
+            continue;
+        }
+        try {
+            const stats = statSync(entryPath);
+            if (stats.size > 5 * 1024 * 1024) continue;
+            const content = readFileSync(entryPath, 'utf8');
+            if (!content.startsWith('#!')) continue;
+
+            let modified = content;
+            modified = modified.replace(/^#!\/data\/data\/com\.termux\/files\/usr\/bin\/sh/gm, '#!/bin/sh');
+            modified = modified.replace(/^#!\/data\/data\/com\.termux\/files\/usr\/bin\/bash/gm, '#!/bin/bash');
+            modified = modified.replace(/^#!\/data\/data\/com\.termux\/files\/usr\/bin\/perl/gm, '#!/usr/bin/perl');
+            modified = modified.replace(/^#!\/data\/data\/com\.termux\/files\/usr\/bin\/python[23]?/gm, '#!/usr/bin/python3');
+
+            if (modified !== content) {
+                writeFileSync(entryPath, modified, { mode: stats.mode });
+                console.log(`  Fixed shebang in ${entry.name}`);
+            }
+        } catch (e) {
+            // Skip binary files that can't be read as UTF-8
+        }
+    }
+}
+
 function cleanIncompatibleAssets(rootDir) {
     if (!existsSync(rootDir)) return;
     const entries = readdirSync(rootDir, { withFileTypes: true });
@@ -129,6 +169,11 @@ function cleanIncompatibleAssets(rootDir) {
         if (entry.isFile()) {
             // Delete compressed files since Android asset merger rejects duplicates
             if (entry.name.endsWith('.gz')) {
+                unlinkSync(entryPath);
+            }
+            // Delete large source map files that bloat the APK
+            if (entry.name.endsWith('.map')) {
+                console.log(`Removing source map: ${entryPath}`);
                 unlinkSync(entryPath);
             }
             // Delete native node Addons (glibc compiled, incompatible with Android Bionic)
@@ -234,13 +279,14 @@ exec "$DIR/rg.bin" "$@"
 
 cpSync(ovsxRouterSrc, path.resolve(configOut, 'ovsx-router-config.json'));
 
-// Copy only essential Termux binaries (git/npm/python installed via apt in Debian)
+// Copy essential Termux binaries and runtime support files.
 if (existsSync(termuxBinDir)) {
     console.log(`Copying essential Termux binaries from ${termuxBinDir}`);
-    
-    // Only these binaries are needed for the Theia backend to run on the host
-    const essentialBinaries = ['node', 'bash', 'bash.real'];
-    
+
+    // Only bundle binaries essential for the IDE to function.
+    // git, npm, python can be installed by the user via apt inside Debian.
+    const essentialBinaries = ['node', 'bash', 'bash.real', 'env'];
+
     for (const bin of essentialBinaries) {
         const src = path.resolve(termuxBinDir, bin);
         if (existsSync(src)) {
@@ -251,61 +297,54 @@ if (existsSync(termuxBinDir)) {
             console.warn(`  WARNING: Essential binary not found: ${src}`);
         }
     }
-    
+
+    // NOTE: npm/node_modules and git/libexec/git-core are no longer bundled.
+    // Users can install them via: apt install -y git nodejs npm python3
+
     await ensureProotBinary();
 
-    // Generate node-wrapper to circumvent Android 10+ stripping LD_LIBRARY_PATH
-    // for binaries executed from the data directory.
-    const nodeWrapperContent = `#!/system/bin/sh
-export LD_LIBRARY_PATH=$(dirname $0)/../lib:$LD_LIBRARY_PATH
-exec $(dirname $0)/node "$@"
-`;
-    writeFileSync(path.resolve(binOut, 'node-wrapper'), nodeWrapperContent, { mode: 0o755 });
-    console.log(`Generated bin/node-wrapper script`);
+    // Copy the pre-compiled ARM64 glibc getcwd shim (proot-getcwd.so).
+    // This LD_PRELOAD library overrides getcwd() to use readlink(/proc/self/cwd)
+    // because Android's seccomp filter blocks the getcwd syscall (#17) for app
+    // processes. Without this, dpkg and other tools fail inside proot with
+    // "getcwd() failed: Function not implemented".
+    const getcwdShimSrc = path.resolve(__dirname, '..', 'proot-shims', 'proot-getcwd.so');
+    const getcwdShimDst = path.resolve(binOut, 'proot-getcwd.so');
+    if (existsSync(getcwdShimSrc)) {
+        copyFileSync(getcwdShimSrc, getcwdShimDst);
+        chmodSync(getcwdShimDst, 0o644);
+        console.log('Copied proot-getcwd.so (getcwd LD_PRELOAD shim for Debian inside proot)');
+    } else {
+        console.warn('WARNING: proot-getcwd.so not found — apt install will fail inside proot.');
+        console.warn(`  Expected at: ${getcwdShimSrc}`);
+        console.warn('  Run: aarch64-linux-gnu-gcc -shared -fPIC -nostartfiles -O2 -o proot-getcwd.so getcwd_shim.c');
+    }
 
-    // Create ps-wrapper (tree-kill uses ps -ax which Toybox doesn't understand, causing backend uncaught exceptions)
-    const psWrapperContent = `#!/system/bin/sh
-args=""
-for arg in "$@"; do
-  if [ "$arg" = "ax" ] || [ "$arg" = "-ax" ]; then
-    args="$args -A"
-  else
-    args="$args $arg"
-  fi
-done
-exec /system/bin/ps $args
-`;
-    writeFileSync(path.resolve(binOut, 'ps'), psWrapperContent, { mode: 0o755 });
-    console.log(`Generated bin/ps script to polyfill Toybox limitations`);
-
-    // Create sh wrapper to redirect Kilocode execa raw calls to Termux bash
-    const shWrapperContent = `#!/system/bin/sh
-DIR="$(cd "$(dirname "$0")" && pwd)"
-if [ "$1" = "-c" ]; then
-    shift
-    exec "$DIR/bash" -c "$@"
-else
-    exec "$DIR/bash" "$@"
-fi
-`;
-    writeFileSync(path.resolve(binOut, 'sh'), shWrapperContent, { mode: 0o755 });
-    console.log(`Generated bin/sh script to redirect execa to bash`);
-
-    // Generate improved bash wrapper with proper initialization
+    // Generate bash wrapper: sets up LD_LIBRARY_PATH and PATH, then delegates to bash.real.
     const bashWrapperContent = `#!/system/bin/sh
 DIR="$(cd "$(dirname "$0")" && pwd)"
 LIB_DIR="$(cd "$DIR/../lib" && pwd)"
 export PATH="$DIR:$PATH"
 export LD_LIBRARY_PATH="$LIB_DIR\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
-export PS1='\\[\\033[01;32m\\]devpocket\\[\\033[00m\\]:\\[\\033[01;34m\\]\\w\\[\\033[00m\\]\\$ '
-export HISTFILE="\$HOME/.bash_history"
-export HISTSIZE=1000
-export HISTFILESIZE=2000
-
-exec "$DIR/bash.real" --noprofile --norc "$@"
+export TMPDIR="$DIR/../tmp"
+mkdir -p "$TMPDIR" 2>/dev/null
+exec "$DIR/bash.real" "$@"
 `;
     writeFileSync(path.resolve(binOut, 'bash'), bashWrapperContent, { mode: 0o755 });
-    console.log('Generated improved bin/bash wrapper');
+    console.log('Generated bin/bash wrapper (passes --login through to bash.real)');
+
+    // Generate node wrapper natively replacing the ELF binary.
+    renameSync(path.resolve(binOut, 'node'), path.resolve(binOut, 'node.real'));
+    const nodeWrapperContent = `#!/system/bin/sh
+DIR="$(cd "$(dirname "$0")" && pwd)"
+LIB_DIR="$(cd "$DIR/../lib" && pwd)"
+export LD_LIBRARY_PATH="$LIB_DIR\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
+export TMPDIR="$DIR/../tmp"
+mkdir -p "$TMPDIR" 2>/dev/null
+exec "$DIR/node.real" "$@"
+`;
+    writeFileSync(path.resolve(binOut, 'node'), nodeWrapperContent, { mode: 0o755 });
+    console.log('Generated bin/node native wrapper');
 
     // Create a no-op spawn-helper for node-pty compatibility.
     // On Linux/Android, forkpty() is used directly and spawn-helper is NOT called.
@@ -319,10 +358,71 @@ exec "$DIR/bash.real" --noprofile --norc "$@"
     console.warn('         Run: ./scripts/download-node-android.sh ' + arch);
 }
 
-// Copy Termux shared libraries
+// Copy Termux shared libraries intelligently to avoid AAPT symlink bloat
+// Android AAPT copies symlink targets as fully duplicated files! (libfoo.so, libfoo.so.1, libfoo.so.1.2 -> 3x size)
 if (existsSync(termuxLibDir)) {
-    console.log(`Copying Termux shared libs from ${termuxLibDir}`);
-    cpSync(termuxLibDir, libOut, { recursive: true });
+    console.log(`Copying Termux shared libs from ${termuxLibDir} (Deduplicating symlinks)`);
+    mkdirSync(libOut, { recursive: true });
+
+    const entries = readdirSync(termuxLibDir, { withFileTypes: true });
+    
+    // Group files by their physical target
+    const targetGroups = {}; // realPath -> array of filenames
+
+    for (const entry of entries) {
+        if (entry.name === 'python3.13' || entry.name === 'python3.11' || entry.name.startsWith('python')) continue; // Skip Python stdlib
+        if (entry.name === 'npm' || entry.name === 'node_modules') continue; // Skip npm
+        if (entry.name === 'git-core') continue; // Skip git
+        if (entry.isDirectory()) continue; // Skip other dirs like apt, dpkg
+
+        const entryPath = path.resolve(termuxLibDir, entry.name);
+        try {
+            const realPath = path.resolve(termuxLibDir, readlinkSync(entryPath));
+            if (!targetGroups[realPath]) targetGroups[realPath] = [];
+            targetGroups[realPath].push(entry.name);
+        } catch (e) {
+            // It's a real file
+            if (!targetGroups[entryPath]) targetGroups[entryPath] = [];
+            targetGroups[entryPath].push(entry.name);
+        }
+    }
+
+    // For each physical file, copy it under ALL required names.
+    // Android can't do symlinks, so we copy the real file for each name
+    // that a binary might reference (e.g. libsqlite3.so AND libsqlite3.so.0).
+    // We only skip fully-versioned copies like libfoo.so.1.2.3 when a shorter
+    // SONAME (libfoo.so.1) already covers them.
+    for (const realPath in targetGroups) {
+        const names = targetGroups[realPath];
+        if (!existsSync(realPath)) continue;
+
+        // Keep: bare .so (needed by ELF NEEDED), .so.N (SONAME), .node
+        // Skip: .so.N.M.P (full version — never referenced by NEEDED)
+        const keepNames = names.filter(n => {
+            if (n.endsWith('.node')) return true;
+            if (n.match(/\.so$/)) return true;        // bare .so
+            if (n.match(/\.so\.\d+$/)) return true;   // .so.N  (SONAME)
+            // .so.N.M — keep only if no .so.N exists
+            if (n.match(/\.so\.\d+\.\d+$/)) {
+                return !names.some(x => x.match(/\.so\.\d+$/) && x !== n);
+            }
+            // .so.N.M.P — keep only if nothing shorter exists
+            if (n.match(/\.so\.\d+\.\d+\.\d+$/)) {
+                return !names.some(x => (x.match(/\.so\.\d+$/) || x.match(/\.so\.\d+\.\d+$/)) && x !== n);
+            }
+            return true; // keep anything else
+        });
+
+        const finalNames = keepNames.length > 0 ? keepNames : names;
+
+        for (const name of finalNames) {
+            const destPath = path.resolve(libOut, name);
+            copyFileSync(realPath, destPath);
+            chmodSync(destPath, 0o755);
+        }
+        const skipped = names.length - finalNames.length;
+        console.log(`  Copied ${finalNames.join(', ')} (skipped ${skipped} redundant versions)`);
+    }
 } else {
     console.warn(`WARNING: Termux lib dir not found at ${termuxLibDir}`);
 }

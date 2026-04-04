@@ -340,7 +340,41 @@ class BootstrapInstallerService(private val context: Context) {
             // 1. Create user home directory
             val userHome = File(debianDir, "home/$username")
             userHome.mkdirs()
-            
+
+            // Pre-create essential system directories that apt/dpkg require.
+            // proot's mkdirat interception may not work on all Android kernel versions,
+            // so we create them on the host (Android) filesystem where debianDir lives.
+            listOf(
+                "tmp", "run",
+                "var/tmp", "var/run", "var/log/apt",
+                "var/lib/apt/lists/partial",
+                "var/lib/dpkg/info", "var/lib/dpkg/updates", "var/lib/dpkg/parts",
+                "var/cache/apt/archives/partial",
+                "var/cache/debconf"
+            ).forEach { dir ->
+                File(debianDir, dir).apply {
+                    mkdirs()
+                    setReadable(true, false)
+                    setWritable(true, false)
+                    setExecutable(true, false)
+                }
+            }
+            // Create empty dpkg lock files to prevent lock-acquisition errors inside proot
+            listOf(
+                "var/lib/dpkg/lock",
+                "var/lib/dpkg/lock-frontend",
+                "var/cache/apt/archives/lock",
+                "var/lib/apt/lists/lock"
+            ).forEach { lockPath ->
+                File(debianDir, lockPath).apply {
+                    parentFile?.mkdirs()
+                    if (!exists()) createNewFile()
+                }
+            }
+            // Initialize dpkg database files (apt refuses to run without these)
+            File(debianDir, "var/lib/dpkg/status").apply { parentFile?.mkdirs(); if (!exists()) createNewFile() }
+            File(debianDir, "var/lib/dpkg/available").apply { parentFile?.mkdirs(); if (!exists()) createNewFile() }
+
             // 2. Initialize home for a real Linux user
             // Write /etc/passwd entry
             val etcDir = File(debianDir, "etc")
@@ -365,7 +399,17 @@ class BootstrapInstallerService(private val context: Context) {
             } else {
                 groupFile.writeText(groupEntry + "\n")
             }
-            
+
+            // Write /etc/hostname
+            File(etcDir, "hostname").writeText("devpocket\n")
+
+            // Write /etc/resolv.conf (Google + Cloudflare DNS as fallback;
+            // the shell wrapper copies Android's live resolv.conf on each launch)
+            val resolvConf = File(etcDir, "resolv.conf")
+            if (!resolvConf.exists()) {
+                resolvConf.writeText("nameserver 8.8.8.8\nnameserver 1.1.1.1\n")
+            }
+
             // 3. Create shell configuration files
             val bashrcContent = """
                 # .bashrc for DevPocket Debian environment
@@ -660,7 +704,7 @@ echo "Done! GPG keys installed and sources.list updated."
     /**
      * Copy shell wrapper script into Debian bin directory
      */
-    private fun copyShellWrapperToDebianBin(debianDir: File) {
+    internal fun copyShellWrapperToDebianBin(debianDir: File) {
         val binDir = File(debianDir, "bin")
         binDir.mkdirs()
         val username = stateManager.getConfig().username ?: "devpocket"
@@ -686,6 +730,11 @@ export LANG=C.UTF-8
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 export PROOT_TMP_DIR="${'$'}{DEVPOCKET_APP_CACHE}/proot-tmp"
 export PROOT_NO_SECCOMP=1
+
+# Android sh (mksh) requires TMPDIR to be set for heredocs (<< EOF) to work!
+export TMPDIR="${'$'}{DEVPOCKET_APP_CACHE}/android-tmp"
+mkdir -p "${'$'}PROOT_TMP_DIR" "${'$'}TMPDIR"
+chmod 1777 "${'$'}PROOT_TMP_DIR" "${'$'}TMPDIR"
 
 PROOT_BIN="${'$'}{DEVPOCKET_RUNTIME_BIN}/proot"
 FALLBACK_SHELL="/system/bin/sh"
@@ -714,11 +763,187 @@ fi
 
 mkdir -p "${'$'}PROOT_TMP_DIR" "${'$'}{DEVPOCKET_APP_CACHE}/android-tmp"
 
-exec "${'$'}PROOT_BIN" --link2symlink -0 -r "${'$'}{DEVPOCKET_DEBIAN_ROOT}" \
-  -b /dev -b /proc -b /sys \
+# === Fake /proc/sys/crypto/fips_enabled for libgcrypt ===
+FIPS_DIR="${'$'}{DEVPOCKET_APP_CACHE}/fakeproc"
+mkdir -p "${'$'}FIPS_DIR"
+echo "0" > "${'$'}{FIPS_DIR}/fips_enabled"
+
+# === Fix apt for PRoot environment (HOST SIDE modifications) ===
+DEBIAN_ROOT="${'$'}{DEVPOCKET_DEBIAN_ROOT}"
+
+# 1) Replace /usr/lib/apt/methods/gpgv with a protocol-speaking handler
+APT_METHODS_DIR="${'$'}{DEBIAN_ROOT}/usr/lib/apt/methods"
+APT_GPGV="${'$'}{APT_METHODS_DIR}/gpgv"
+if [ -f "${'$'}APT_GPGV" ]; then
+  MAGIC=${'$'}(head -c 4 "${'$'}APT_GPGV" 2>/dev/null | cat -v)
+  case "${'$'}MAGIC" in
+    *ELF*) [ -f "${'$'}{APT_GPGV}.orig" ] || cp "${'$'}APT_GPGV" "${'$'}{APT_GPGV}.orig" ;;
+  esac
+fi
+cat > "${'$'}APT_GPGV" << 'GPGV_METHOD_EOF'
+#!/bin/sh
+echo "100 Capabilities"
+echo "Version: 1.2"
+echo "Single-Instance: true"
+echo ""
+while IFS= read -r line; do
+  case "${'$'}line" in
+    "600 URI Acquire")
+      URI=""
+      FILENAME=""
+      while IFS= read -r hdr; do
+        [ -z "${'$'}hdr" ] && break
+        case "${'$'}hdr" in
+          URI:*) URI=${'$'}{hdr#URI: } ;;
+          Filename:*) FILENAME=${'$'}{hdr#Filename: } ;;
+        esac
+      done
+      echo "201 URI Done"
+      echo "URI: ${'$'}URI"
+      echo "Filename: ${'$'}FILENAME"
+      echo "Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg"
+      echo ""
+      ;;
+    "601 Configuration"|"6"*)
+      while IFS= read -r hdr; do
+        [ -z "${'$'}hdr" ] && break
+      done
+      ;;
+    "") ;;
+  esac
+done
+GPGV_METHOD_EOF
+chmod 755 "${'$'}APT_GPGV"
+
+# 2) Replace /usr/bin/gpgv with no-op
+GPGV_BIN="${'$'}{DEBIAN_ROOT}/usr/bin/gpgv"
+if [ -f "${'$'}GPGV_BIN" ]; then
+  MAGIC=${'$'}(head -c 4 "${'$'}GPGV_BIN" 2>/dev/null | cat -v)
+  case "${'$'}MAGIC" in
+    *ELF*)
+      [ -f "${'$'}{GPGV_BIN}.orig" ] || cp "${'$'}GPGV_BIN" "${'$'}{GPGV_BIN}.orig"
+      printf '#!/bin/sh\nexit 0\n' > "${'$'}GPGV_BIN"
+      chmod 755 "${'$'}GPGV_BIN"
+      ;;
+  esac
+fi
+
+# 3) Write sources.list with [trusted=yes]
+cat > "${'$'}{DEBIAN_ROOT}/etc/apt/sources.list" << 'SOURCES_EOF'
+deb [trusted=yes] http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
+deb [trusted=yes] http://deb.debian.org/debian-security bookworm-security main contrib
+deb [trusted=yes] http://deb.debian.org/debian bookworm-updates main contrib
+SOURCES_EOF
+
+# 4) APT config: allow insecure repos
+mkdir -p "${'$'}{DEBIAN_ROOT}/etc/apt/apt.conf.d"
+cat > "${'$'}{DEBIAN_ROOT}/etc/apt/apt.conf.d/99allow-insecure" << 'APT_CONF_EOF'
+Acquire::AllowInsecureRepositories "true";
+Acquire::AllowDowngradeToInsecureRepositories "true";
+APT::Get::AllowUnauthenticated "true";
+Acquire::Check-Valid-Until "false";
+APT_CONF_EOF
+
+# 5) Clean stale sources.list.d entries
+rm -f "${'$'}{DEBIAN_ROOT}/etc/apt/sources.list.d/"*.sources 2>/dev/null
+rm -f "${'$'}{DEBIAN_ROOT}/etc/apt/sources.list.d/"* 2>/dev/null
+
+# === Pre-create essential directories in Debian rootfs (host-side) ===
+# proot's mkdirat may not be intercepted on all Android kernel versions.
+# Directories that apt, dpkg, and bash need MUST exist before proot starts.
+mkdir -p "${'$'}{DEBIAN_ROOT}/home/$username" 2>/dev/null || true
+mkdir -p "${'$'}{DEBIAN_ROOT}/tmp" 2>/dev/null || true
+mkdir -p "${'$'}{DEBIAN_ROOT}/run" 2>/dev/null || true
+mkdir -p "${'$'}{DEBIAN_ROOT}/var/tmp" 2>/dev/null || true
+mkdir -p "${'$'}{DEBIAN_ROOT}/var/run" 2>/dev/null || true
+mkdir -p "${'$'}{DEBIAN_ROOT}/var/log/apt" 2>/dev/null || true
+mkdir -p "${'$'}{DEBIAN_ROOT}/var/lib/apt/lists/partial" 2>/dev/null || true
+mkdir -p "${'$'}{DEBIAN_ROOT}/var/lib/dpkg/info" 2>/dev/null || true
+mkdir -p "${'$'}{DEBIAN_ROOT}/var/lib/dpkg/updates" 2>/dev/null || true
+mkdir -p "${'$'}{DEBIAN_ROOT}/var/lib/dpkg/parts" 2>/dev/null || true
+mkdir -p "${'$'}{DEBIAN_ROOT}/var/cache/apt/archives/partial" 2>/dev/null || true
+mkdir -p "${'$'}{DEBIAN_ROOT}/var/cache/debconf" 2>/dev/null || true
+chmod 1777 "${'$'}{DEBIAN_ROOT}/tmp" 2>/dev/null || true
+chmod 1777 "${'$'}{DEBIAN_ROOT}/var/tmp" 2>/dev/null || true
+# Create empty dpkg/apt lock files if missing
+[ -f "${'$'}{DEBIAN_ROOT}/var/lib/dpkg/lock" ] || touch "${'$'}{DEBIAN_ROOT}/var/lib/dpkg/lock" 2>/dev/null || true
+[ -f "${'$'}{DEBIAN_ROOT}/var/lib/dpkg/lock-frontend" ] || touch "${'$'}{DEBIAN_ROOT}/var/lib/dpkg/lock-frontend" 2>/dev/null || true
+[ -f "${'$'}{DEBIAN_ROOT}/var/cache/apt/archives/lock" ] || touch "${'$'}{DEBIAN_ROOT}/var/cache/apt/archives/lock" 2>/dev/null || true
+[ -f "${'$'}{DEBIAN_ROOT}/var/lib/apt/lists/lock" ] || touch "${'$'}{DEBIAN_ROOT}/var/lib/apt/lists/lock" 2>/dev/null || true
+# Ensure dpkg database files exist (apt refuses to start without them, even if empty)
+[ -f "${'$'}{DEBIAN_ROOT}/var/lib/dpkg/status" ] || touch "${'$'}{DEBIAN_ROOT}/var/lib/dpkg/status" 2>/dev/null || true
+[ -f "${'$'}{DEBIAN_ROOT}/var/lib/dpkg/available" ] || touch "${'$'}{DEBIAN_ROOT}/var/lib/dpkg/available" 2>/dev/null || true
+# Sync Android's live DNS settings into Debian rootfs so apt can resolve hostnames
+if [ -f /etc/resolv.conf ]; then
+  cp /etc/resolv.conf "${'$'}{DEBIAN_ROOT}/etc/resolv.conf" 2>/dev/null || true
+elif [ ! -s "${'$'}{DEBIAN_ROOT}/etc/resolv.conf" ]; then
+  printf 'nameserver 8.8.8.8\nnameserver 1.1.1.1\n' > "${'$'}{DEBIAN_ROOT}/etc/resolv.conf" 2>/dev/null || true
+fi
+
+# For non-interactive -c invocations skip --login (avoids profile side-effects).
+# For interactive shells keep --login so .bash_profile is sourced.
+_BASH_OPTS="--login"
+for _arg in "$@"; do
+  case "${'$'}_arg" in -c) _BASH_OPTS="" ; break ;; esac
+done
+
+# === Install getcwd LD_PRELOAD shim ===
+# Android's seccomp filter blocks the getcwd syscall (#17) for app processes.
+# glibc calls it directly; proot can't intercept what the kernel kills first.
+# This pre-compiled shim overrides getcwd() to use readlink(/proc/self/cwd)
+# which proot DOES intercept correctly. Without it dpkg fails with:
+#   "sh: 0: getcwd() failed: Function not implemented"
+GETCWD_SHIM_SRC="${'$'}{DEVPOCKET_RUNTIME_BIN}/proot-getcwd.so"
+GETCWD_SHIM_DST="${'$'}{DEBIAN_ROOT}/usr/local/lib/proot-getcwd.so"
+if [ -f "${'$'}GETCWD_SHIM_SRC" ]; then
+  mkdir -p "${'$'}{DEBIAN_ROOT}/usr/local/lib"
+  cp "${'$'}GETCWD_SHIM_SRC" "${'$'}GETCWD_SHIM_DST" 2>/dev/null || true
+  chmod 755 "${'$'}GETCWD_SHIM_DST" 2>/dev/null || true
+fi
+# Set LD_PRELOAD only if the shim was successfully copied
+if [ -f "${'$'}GETCWD_SHIM_DST" ]; then
+  PROOT_LD_PRELOAD="/usr/local/lib/proot-getcwd.so"
+else
+  PROOT_LD_PRELOAD=""
+fi
+
+# Determine proot working directory: use home if it exists, otherwise / (always valid).
+# This prevents proot's initial chdir from failing silently, which would cause
+# getcwd() to return ENOSYS for the entire bash session.
+PROOT_WD="/home/$username"
+if [ ! -d "${'$'}{DEBIAN_ROOT}/home/$username" ]; then
+  PROOT_WD="/"
+fi
+
+# === Launch Debian PRoot ===
+# --kill-on-exit: kill all traced child processes when proot exits (prevents zombies)
+exec "${'$'}PROOT_BIN" \
+  --kill-on-exit \
+  --link2symlink \
+  -0 \
+  -r "${'$'}DEBIAN_ROOT" \
+  -b /dev \
+  -b /proc \
+  -b "${'$'}{FIPS_DIR}/fips_enabled:/proc/sys/crypto/fips_enabled" \
+  -b /sys \
+  -b /system \
+  -b /apex \
   -b /sdcard \
-  -w "/home/$username" \
-  /bin/bash --login "$@"
+  -b "${'$'}{DEVPOCKET_APP_CACHE}/android-tmp:/tmp" \
+  -w "${'$'}PROOT_WD" \
+    /usr/bin/env -i \
+    HOME="/home/$username" \
+    USER="$username" \
+    LOGNAME="$username" \
+    PWD="${'$'}PROOT_WD" \
+    TERM=xterm-256color \
+    COLORTERM=truecolor \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    DEBIAN_FRONTEND=noninteractive \
+    PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+    LD_PRELOAD="${'$'}PROOT_LD_PRELOAD" \
+  /bin/bash ${'$'}_BASH_OPTS "$@"
 """
         
         wrapperFile.writeText(wrapperScript)

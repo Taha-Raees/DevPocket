@@ -1,0 +1,24 @@
+ root@devpocket:~# apt update
+
+                            WARNING: apt does not have a stable CLI interface. Use with caution in scripts.
+
+                         Get:1 http://deb.debian.org/debian bookworm InRelease [151 kB]
+Get:2 http://deb.debian.org/debian-security bookworm-security InRelease [48.0 kB]
+Get:3 http://deb.debian.org/debian bookworm-updates InRelease [55.4 kB]
+Ign:1 http://deb.debian.org/debian bookworm InRelease
+Get:4 http://deb.debian.org/debian bookworm/non-free-firmware arm64 Packages [5832 B]
+Get:5 http://deb.debian.org/debian bookworm/non-free arm64 Packages [75.8 kB]
+Get:6 http://deb.debian.org/debian bookworm/main arm64 Packages [8691 kB]
+Ign:2 http://deb.debian.org/debian-security bookworm-security InRelease
+Ign:3 http://deb.debian.org/debian bookworm-updates InRelease
+Get:7 http://deb.debian.org/debian bookworm/contrib arm64 Packages [45.7 kB]
+Get:8 http://deb.debian.org/debian-security bookworm-security/main arm64 Packages [290 kB]
+Get:9 http://deb.debian.org/debian-security bookworm-security/contrib arm64 Packages [508 B]
+Get:10 http://deb.debian.org/debian bookworm-updates/main arm64 Packages [6936 B]
+Fetched 9370 kB in 14s (692 kB/s)
+Reading package lists...
+W: GPG error: http://deb.debian.org/debian bookworm InRelease: The following signatures couldn't be verified because the public key is not available: NO_PUBKEY 6ED0E7B82643E131 NO_PUBKEY 78DBA3BC47EF2265 NO_PUBKEY F8D2585B8783D481
+                         W: GPG error: http://deb.debian.org/debian-security bookworm-security InRelease: The following signatures couldn't be verified because the public key is not available: NO_PUBKEY 54404762BBB6E853 NO_PUBKEY BDE6D2B9216EC7A8
+                                        W: GPG error: http://deb.debian.org/debian bookworm-updates InRelease: The following signatures couldn't be verified because the public key is not available: NO_PUBKEY 6ED0E7B82643E131 NO_PUBKEY 78DBA3BC47EF2265
+     E: Sub-process returned an error code
+ root@devpocket:~# 

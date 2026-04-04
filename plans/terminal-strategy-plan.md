@@ -1,330 +1,421 @@
-# DevPocket terminal strategy plan
+# Debian terminal completion plan
 
-## Final product decision
+## Mission
 
-DevPocket will adopt a **Debian-first isolated terminal runtime**.
+Finish the Debian terminal implementation so the in-app terminal behaves like a laptop shell inside Debian.
 
-Core decision:
-- The app remains lightweight at install time
-- First launch onboarding downloads and prepares a **minimal Debian CLI rootfs**
-- Terminal sessions open into Debian by default
-- Users install tools such as Git, Python, Node, npm, clang, and other packages later with `apt`
-- The main development workspace lives in **app-private Linux storage**, not normal shared Android storage
-- Shared phone storage is treated as **import and export space**, not the primary project workspace
-- A tiny hidden host bootstrap runtime remains available for repair, setup, and recovery flows
+Success means:
+- terminal sessions launch into Debian every time
+- there is no Android host shell fallback in the user path
+- `git`, `node`, `npm`, `npx`, `python3`, and `apt` are usable from the Debian terminal
+- HTTPS operations work with the bundled CA bundle
+- existing installs receive the new runtime payload after upgrade
 
-This direction is chosen because it gives the closest laptop-like IDE behavior while avoiding a heavy prebundled toolchain.
+This plan is intentionally narrow. It does not redesign onboarding, package UI, or backend placement beyond what is required to finish the terminal.
 
 ---
 
-## Why this fixes the current terminal pain points
+## Repo review summary
 
-Current issues are strongly related to the Android-hosted environment visible in [`TheiaBackendService.kt`](android-app/android/app/src/main/java/com/theia/mobile/TheiaBackendService.kt) where the runtime is configured around external storage paths and patched shell behavior.
+### Already correct enough and should be preserved
 
-Likely causes of current pain:
-- Git helpers and shell behavior are being patched manually in [`createProcessBuilder`](android-app/android/app/src/main/java/com/theia/mobile/TheiaBackendService.kt:129)
-- Workspace root is currently external shared storage at [`/storage/emulated/0/Documents/DevPocket`](android-app/android/app/src/main/java/com/theia/mobile/TheiaBackendService.kt:139)
-- Android shared storage does not behave like a normal Linux filesystem for permissions, ownership, executable bits, and some tool expectations
-- Shell and runtime behavior are being adapted from the host environment instead of from a more standard Linux userland
+1. Terminal selection logic is already Debian-aware in `packages/terminal/src/node/shell-process.ts` and prefers `devpocket-shell` when `DEVPOCKET_DEBIAN_ROOT` is present.
+2. `packages/terminal/src/node/shell-terminal-server.ts` already forwards `DEVPOCKET_*`, locale, and terminal capability variables into terminal creation.
+3. `packages/process/src/node/terminal-process.ts` already removed the noisy `stty` resize injection from the Android pipe fallback.
+4. `android-app/android/app/src/main/java/com/theia/mobile/TheiaBackendService.kt` already uses host `resolvedShell` for `npm_config_script_shell` and `npm_config_shell`, which is the correct direction for backend-side npm lifecycle scripts.
+5. `android-app/android/app/src/main/java/com/theia/mobile/AssetExtractor.kt` already contains the executable-bitness logic for `git-core`, `proot`, `bash.real`, and `python3`.
 
-The Debian-isolated model reduces these issues by moving the terminal toolchain and project workspace into a proper Linux-style filesystem owned by the app.
+### Still broken or incomplete
 
----
-
-## Product model
-
-### User experience goals
-- App should feel like a normal mobile app on first launch
-- Welcome, login, guide, and onboarding are handled in Kotlin before loading the IDE
-- Onboarding prepares the terminal environment once
-- After onboarding, the user lands in a Debian-based terminal and IDE workspace that feels close to a laptop setup
-- Tools are not preinstalled except for the minimal runtime required to make Debian usable
-- Advanced tools are installed later by the user from terminal
-
-### Runtime model
-- **User-facing runtime**: minimal Debian CLI environment
-- **Hidden bootstrap runtime**: minimal host runtime used to download, extract, repair, and launch Debian
-- **Primary workspace**: app-private Linux workspace
-- **Shared storage role**: optional import, export, backup, and file transfer only
+1. `products/theia-android-lite/scripts/build-runtime-assets.mjs` now bundles only `node`, `bash`, and `bash.real` from Termux. That removed the toolchain the Debian terminal needs.
+2. The build script does not copy npm's `lib/node_modules`, so `npm` and `npx` cannot run even if the wrapper scripts are present.
+3. The build script does not copy `libexec/git-core`, resolve its symlinks, or normalize Termux shebangs.
+4. `android-app/android/app/src/main/java/com/theia/mobile/BootstrapInstallerService.kt` still writes a `devpocket-shell` wrapper that enters Debian without bind-mounting the runtime into Debian.
+5. The wrapper still has an Android fallback shell path. That directly conflicts with the Debian-first goal.
+6. The Debian user shell files do not yet export `/opt/devpocket/bin`, `GIT_EXEC_PATH`, SSL variables, or npm settings.
+7. `AssetExtractor.kt` is already at marker `v20`, so another runtime payload change now requires a fresh marker bump or upgrades will not re-extract.
 
 ---
 
-## Architecture overview
+## What changed after commit `5db9e0c36234e0bc3dbb412b1776a4dad005f7d0`
+
+### Regressions introduced by that commit path
+
+1. Runtime assembly stopped copying the full Termux toolchain and moved to a minimal host-only bundle.
+2. The terminal plumbing began routing through Debian, but the runtime binaries were never made visible inside Debian.
+3. The wrapper script kept a host fallback, which masked Debian breakage instead of forcing a real fix.
+
+### Improvements made after that commit and already present now
+
+1. `AssetExtractor.kt` was advanced to `v20` and now marks `git-core` files executable.
+2. `TheiaBackendService.kt` already corrected npm shell config to use the host shell instead of the Debian wrapper.
+3. `BootstrapInstallerService.kt` already contains Debian apt and dpkg compatibility scripts that should remain in place.
+
+### Conclusion
+
+The current repo is partially repaired. The remaining work is concentrated in runtime assembly and the Debian wrapper environment, not in the TypeScript terminal plumbing.
+
+---
+
+## Locked decisions for implementation
+
+1. Debian remains the only supported user-facing terminal environment.
+2. `devpocket-shell` must fail hard if Debian or `proot` is missing. No Android host fallback in the wrapper.
+3. The Theia backend stays on the Android host for now.
+4. The Debian terminal gets host-provided Termux binaries via bind mounts under `/opt/devpocket`.
+5. We do not install developer packages during onboarding. We only make the terminal capable of running the mounted toolchain and Debian package manager.
+6. We do not reintroduce any custom `git-remote-https` wrapper. Git helpers must remain real binaries or real copied helper files.
+7. Existing TypeScript terminal routing stays untouched unless post-implementation verification proves a hidden dependency.
+
+---
+
+## Target runtime model
 
 ```mermaid
 flowchart TD
-    A[First launch] --> B[Welcome login guide]
-    B --> C[Terminal onboarding]
-    C --> D[Install bootstrap runtime]
-    D --> E[Download Debian rootfs]
-    E --> F[Create isolated Linux workspace]
-    F --> G[Create default user and sudo policy]
-    G --> H[Start backend and terminal]
-    H --> I[Open IDE in Debian workspace]
-    I --> J[Optional import export shared storage]
+    A[Terminal request] --> B[ShellProcess chooses devpocket-shell]
+    B --> C[PRoot enters Debian root]
+    C --> D[Bind runtime to opt devpocket]
+    D --> E[Set clean env with env -i]
+    E --> F[Launch bash login shell]
+    F --> G[Load bash_profile and bashrc]
+    G --> H[git npm node python apt work]
 ```
 
 ---
 
-## Detailed implementation plan
+## Exact execution plan for Haiku
 
-### Phase 1 — Define runtime boundaries
-1. Document the separation between:
-   - Android app shell
-   - hidden bootstrap runtime
-   - Debian userland runtime
-   - IDE backend runtime
-2. Define a stable directory layout inside app-private storage for:
+### Workstream 1: restore runtime payload assembly
+
+**Primary file:** `products/theia-android-lite/scripts/build-runtime-assets.mjs`
+
+#### Required changes
+
+1. Expand the essential runtime binary list beyond host `node` and shell binaries.
+2. Copy these binaries at minimum:
+   - `node`
+   - `bash`
+   - `bash.real`
+   - `git`
+   - `npm`
+   - `npx`
+   - `python3`
+   - `python3.real`
+3. Copy npm runtime modules into `runtime/bin/lib/node_modules` so the Termux `npm` and `npx` wrappers resolve correctly.
+4. Copy `libexec/git-core` into `runtime/bin/libexec/git-core`.
+5. Resolve all symlinks under copied `git-core`, because Android assets do not preserve symlinks.
+6. Normalize Termux shebangs under copied shell and script helpers:
+   - Termux `sh` to `/bin/sh`
+   - Termux `bash` to `/bin/bash`
+   - Termux `perl` to `/usr/bin/perl`
+   - Termux `python` to `/usr/bin/python3`
+7. Add `readFileSync` to the top-level fs import and implement a synchronous `fixTermuxShebangs` helper.
+8. Keep `ensureProotBinary()` exactly in the build flow after runtime asset copy setup.
+9. Do **not** overwrite any git helper with wrapper shell scripts.
+
+#### Notes for Haiku
+
+- Keep the current host-side `node-wrapper`, `ps`, `sh`, and `bash` generation unless verification proves one of them conflicts with the Debian terminal.
+- The critical fix is visibility of runtime binaries inside Debian, not replacing current host backend bootstrapping.
+- Do not broaden this into a full Termux copy again. Only the needed runtime and helper directories should be restored.
+
+#### Review checks
+
+- `runtime/bin/git` exists
+- `runtime/bin/npm` exists
+- `runtime/bin/npx` exists
+- `runtime/bin/python3` exists
+- `runtime/bin/lib/node_modules/npm/bin/npm-cli.js` exists
+- `runtime/bin/libexec/git-core` exists
+- `find runtime/bin/libexec/git-core -type l` returns zero symlinks in the assembled assets
+- helper scripts no longer contain Termux shebang paths
+
+---
+
+### Workstream 2: rewrite Debian launcher and shell environment
+
+**Primary file:** `android-app/android/app/src/main/java/com/theia/mobile/BootstrapInstallerService.kt`
+
+#### Section A: replace `copyShellWrapperToDebianBin()` wrapper contents
+
+The wrapper must:
+
+1. Unset `LD_PRELOAD`.
+2. Define host-side paths for:
+   - app data root
    - Debian rootfs
-   - user home
-   - projects
-   - package cache
-   - terminal logs
-   - temporary install files
-   - repair metadata
-3. Decide whether the Theia backend runs:
-   - inside Debian, or
-   - in the host bootstrap layer with terminal shells entering Debian
-4. Recommended target: move terminal shell execution and as much developer tooling as possible into Debian, while keeping Android-specific service orchestration on the Kotlin side.
+   - runtime `bin`
+   - runtime `lib`
+   - runtime `etc`
+   - `proot`
+   - `proot` temp dir
+3. Verify `proot` exists and is executable. If not, print a fatal message and exit nonzero.
+4. Export `PROOT_TMP_DIR`, `PROOT_NO_SECCOMP`, and host `LD_LIBRARY_PATH` for the launcher itself.
+5. Create required temp directories.
+6. Execute `proot` with:
+   - `--link2symlink`
+   - `-0`
+   - `-r` Debian root
+   - binds for `/dev`, `/proc`, `/sys`, `/sdcard`
+   - bind mounts for runtime paths into Debian:
+     - `runtime/bin` to `/opt/devpocket/bin`
+     - `runtime/lib` to `/opt/devpocket/lib`
+     - `runtime/etc` to `/opt/devpocket/etc`
+7. Set working directory to `/home/<username>`.
+8. Enter Debian through `/usr/bin/env -i` and explicitly define the clean runtime environment:
+   - `HOME`
+   - `USER`
+   - `LOGNAME`
+   - `TERM`
+   - `COLORTERM`
+   - `LANG`
+   - `LC_ALL`
+   - `DEBIAN_FRONTEND`
+   - `PATH` with `/opt/devpocket/bin` first
+   - `LD_LIBRARY_PATH` as `/opt/devpocket/lib`
+   - `GIT_EXEC_PATH` as `/opt/devpocket/bin/libexec/git-core`
+   - `GIT_CONFIG_NOSYSTEM=1`
+   - `GIT_TEMPLATE_DIR=`
+   - `SSL_CERT_FILE`
+   - `GIT_SSL_CAINFO`
+   - `CURL_CA_BUNDLE`
+   - `NODE_EXTRA_CA_CERTS`
+   - `npm_config_bin_links=false`
+9. Launch `/bin/bash --login "$@"`.
+10. Remove every fallback branch that invokes `/system/bin/sh`.
 
-### Phase 2 — Add onboarding flow on Kotlin side
-1. Replace the current direct backend-first launch path in [`MainActivity.onCreate`](android-app/android/app/src/main/java/com/theia/mobile/MainActivity.kt:37) with an onboarding gate.
-2. Add onboarding states:
-   - first launch
-   - welcome
-   - login
-   - guide walkthrough
-   - Debian install required
-   - installing
-   - install failed with retry and repair
-   - ready to open IDE
-3. Persist onboarding completion and runtime version markers.
-4. Add resumable install progress so onboarding survives app restarts.
-5. Add preflight checks:
-   - free storage available
-   - network availability
-   - battery and charging recommendation
-   - corrupted previous install detection
+#### Section B: update user shell files in `createUserAccount()`
 
-### Phase 3 — Bootstrap runtime installer
-1. Create a bootstrap installer service on Android side responsible for:
-   - downloading rootfs artifacts
-   - checksum verification
-   - extraction
-   - filesystem layout creation
-   - launch script generation
-   - recovery actions
-2. Keep bootstrap minimal and non-user-facing.
-3. Version the runtime so upgrades and repairs are deterministic.
-4. Store install manifest with:
-   - rootfs version
-   - installer version
-   - download source
-   - checksum
-   - migration status
-5. Add rollback and reinstall support.
+Rewrite `.bashrc` so every interactive Debian shell inherits the runtime mount setup:
 
-### Phase 4 — Debian rootfs strategy
-1. Use **minimal Debian CLI** as the default downloadable rootfs.
-2. Keep the initial image intentionally small.
-3. Include only what is required to make a usable shell environment work reliably, such as:
-   - shell essentials
-   - apt
-   - ca certificates
-   - core utilities needed for package management and login shell startup
-4. Do not preinstall developer stacks such as Node, npm, Python, Git, Java, Rust, Go, or compilers unless absolutely required for bootstrapping.
-5. Decide rootfs source strategy:
-   - trusted upstream Debian rootfs snapshot, or
-   - DevPocket-curated minimal rootfs artifact
-6. Recommended target: curated minimal artifact for reproducibility.
+1. Prepend `/opt/devpocket/bin` to `PATH`.
+2. Prepend `/opt/devpocket/lib` to `LD_LIBRARY_PATH`.
+3. Export `GIT_EXEC_PATH`, `GIT_CONFIG_NOSYSTEM`, and `GIT_TEMPLATE_DIR`.
+4. Export SSL variables pointing to `/opt/devpocket/etc/ca-certificates/cacert.pem`.
+5. Export `npm_config_bin_links=false`.
+6. Keep prompt, colors, history, locale, and terminal capability setup.
 
-### Phase 5 — Filesystem and workspace model
-1. Stop treating shared Android storage as the default project home.
-2. Replace the external workspace assumption currently visible in [`TheiaBackendService.kt`](android-app/android/app/src/main/java/com/theia/mobile/TheiaBackendService.kt:139) with an app-private Linux workspace.
-3. Proposed workspace zones:
-   - `/linux/rootfs` for Debian system files
-   - `/linux/home/devpocket` for user home
-   - `/linux/workspaces` for active projects
-   - `/shared-imports` for imported files from phone storage
-   - `/exports` for user-requested export operations
-4. Add explicit import and export actions in app UI instead of silent reliance on shared storage paths.
-5. Define backup behavior for projects and package caches.
+Rewrite `.bash_profile` so it:
+1. sources `.bashrc`
+2. appends `/home/<username>/.local/bin`
 
-### Phase 6 — User account and sudo model
-1. During onboarding, ask for:
-   - username
-   - optional display name
-   - sudo behavior
-2. Recommended default:
-   - create a normal user such as `devpocket`
-   - grant sudo access
-   - allow **passwordless sudo by default** inside the isolated local Debian environment for simpler mobile UX
-3. Offer advanced option during onboarding:
-   - set a sudo password manually
-4. Persist sudo policy choice in install metadata.
-5. Support later change from settings:
-   - set or change password
-   - toggle passwordless sudo
-   - disable sudo if desired
-6. Explain clearly in onboarding that this sudo only affects the isolated Debian environment, not Android system root.
+#### Section C: add Debian-side safety shim for `/usr/bin/env`
 
-### Phase 7 — Terminal launch and shell integration
-1. Add a launch contract so every terminal session starts inside Debian by default.
-2. Standardize environment variables for shell startup, locale, HOME, PATH, TERM, and package cache paths.
-3. Ensure terminal widgets in [`TerminalWidgetImpl`](packages/terminal/src/browser/terminal-widget-impl.ts:174) connect to Debian-backed shells instead of the current patched host-first shell flow.
-4. Review backend shell resolution around [`createTerminal`](packages/terminal/src/browser/terminal-widget-impl.ts:611) and server-side creation in [`ShellTerminalServer.create`](packages/terminal/src/node/shell-terminal-server.ts:57).
-5. Provide fallback entry options:
-   - open normal Debian shell
-   - open repair shell
-   - reopen last workspace terminal
+Add a small compatibility block after the existing apt and dpkg compatibility script creation:
 
-### Phase 8 — Theia backend integration strategy
-1. Map how the IDE backend currently starts from [`startBackendService`](android-app/android/app/src/main/java/com/theia/mobile/MainActivity.kt:110) and [`runBackendSupervisor`](android-app/android/app/src/main/java/com/theia/mobile/TheiaBackendService.kt:81).
-2. Decide backend placement model:
-   - backend outside Debian with terminal sessions entering Debian, or
-   - backend launched from inside Debian
-3. Recommended staged rollout:
-   - **Stage 1**: keep backend service orchestration on Android side, but switch terminal and workspace paths to Debian-managed paths
-   - **Stage 2**: evaluate moving more backend tooling execution into Debian once base stability is proven
-4. Remove environment hacks one by one as Debian becomes the real runtime source of truth.
-5. Revisit current Git and shell-specific environment overrides after Debian integration.
+1. Check whether `usr/bin/env` exists in the extracted Debian root.
+2. If absent, create a minimal shell shim that can handle the wrapper's `env -i` invocation well enough to continue boot.
+3. Mark the shim executable.
 
-### Phase 9 — Package management UX
-1. Make terminal behavior feel laptop-like by default.
-2. Use apt-based commands as the primary documented workflow.
-3. Do not expose host package commands to normal users.
-4. Add optional guided install shortcuts in UI for common tools, for example:
-   - Git
-   - Python
-   - Node and npm
-   - build essentials
-   - OpenJDK
-5. These shortcuts should run normal Debian package installs, not custom one-off installers.
-6. Keep all guided installs optional.
+This is a safety net only. The normal expectation remains that Debian already provides the real `env`.
 
-### Phase 10 — Storage permissions and access model
-1. Reduce reliance on broad all-files access if possible.
-2. Prefer scoped import and export flows for interacting with normal phone storage.
-3. Keep active development inside app-private Linux storage for correctness.
-4. Audit whether current permission requests in [`requestStoragePermissionsIfNeeded`](android-app/android/app/src/main/java/com/theia/mobile/MainActivity.kt:67) can be narrowed after import and export flows are added.
-5. Define clear file transfer UX for:
-   - import project
-   - export project
-   - open downloaded archive
-   - share file out of app
+#### Notes for Haiku
 
-### Phase 11 — Reliability and repair flows
-1. Add install-state machine with durable status markers.
-2. Add health checks for:
-   - rootfs presence
-   - shell launch success
-   - writable home directory
-   - apt lock corruption
-   - broken dpkg state
-   - missing startup scripts
-3. Add repair actions:
-   - reconfigure packages
-   - clear terminal cache
-   - reset shell config
-   - reinstall rootfs while preserving projects
-   - full factory reset of Linux environment
-4. Surface repair options before forcing full reinstall.
+- Preserve the current apt sandbox and init-script compatibility fixes already present in this file.
+- Do not touch onboarding UI logic in this task.
+- Do not add a second wrapper location. Keep the single source of truth at `bin/devpocket-shell` inside Debian.
 
-### Phase 12 — Security and trust model
-1. Keep Debian isolated to app-private storage.
-2. Make clear that Debian root and sudo are local to the containerized environment, not Android root.
-3. Sign and verify runtime downloads.
-4. Use checksum validation before extraction.
-5. Avoid exposing host internals into Debian unless required.
-6. Restrict shared storage mounts to user-approved paths and operations.
+#### Review checks
 
-### Phase 13 — Performance and footprint controls
-1. Keep first download small.
-2. Avoid shipping heavy language runtimes in APK.
-3. Add package cache cleanup controls.
-4. Add disk usage visibility in settings.
-5. Monitor startup time for:
-   - onboarding install
-   - first terminal launch
-   - IDE ready time
-6. Define low-storage warnings and cleanup suggestions.
-
-### Phase 14 — Testing strategy
-1. Test first-run onboarding from clean install.
-2. Test interrupted install during:
-   - download
-   - extraction
-   - user creation
-   - first backend startup
-3. Test terminal correctness for:
-   - shell startup
-   - apt update and install
-   - Git clone
-   - file permissions
-   - executable scripts
-   - SSH key generation
-4. Test workspace behavior inside app-private storage versus shared storage import and export.
-5. Test upgrade and repair flows on existing installs.
-6. Test low-storage and no-network conditions.
-
-### Phase 15 — Rollout order
-1. Implement onboarding gate on Kotlin side.
-2. Implement bootstrap installer and Debian rootfs download.
-3. Move workspace root to app-private Linux storage.
-4. Make terminal launch into Debian by default.
-5. Add user creation and sudo onboarding options.
-6. Add import and export UX for phone storage.
-7. Stabilize package management and Git workflows.
-8. Add repair tools and settings page.
-9. Reassess whether backend execution should move deeper into Debian.
+- the generated wrapper contains bind mounts into `/opt/devpocket`
+- there is no fallback to `/system/bin/sh`
+- the wrapper uses `/usr/bin/env -i`
+- `.bashrc` exports `/opt/devpocket/bin`
+- `.bashrc` exports git and SSL variables
+- Debian `/usr/bin/env` exists either from rootfs or shim
 
 ---
 
-## Decisions locked for implementation
+### Workstream 3: force runtime re-extraction on upgrade
 
-### Locked
-- Debian-first runtime
-- app-private Linux workspace as default
-- apt-based user experience
-- onboarding-driven runtime installation
-- no heavy preinstalled developer packages
-- shared storage used for import and export only
-- hidden bootstrap runtime retained for setup and recovery
+**Primary file:** `android-app/android/app/src/main/java/com/theia/mobile/AssetExtractor.kt`
 
-### Needs explicit implementation choice
-- whether default sudo is passwordless or password-protected
-- whether backend remains partly outside Debian in stage 1
-- exact Debian rootfs source and update channel
-- whether Git should remain absent from base image or be included as a tiny convenience package
+#### Required changes
 
----
+1. Bump the runtime extraction marker from `v20` to `v21`.
 
-## Recommendation on sudo onboarding
+#### Must stay as-is unless broken by compilation
 
-Recommended mobile-first default:
-- create user `devpocket`
-- enable sudo
-- default to passwordless sudo inside the isolated Debian environment
-- show an advanced onboarding option to set a sudo password instead
-- allow changing this later from settings
+1. The executable basename list already includes:
+   - `python3`
+   - `python3.real`
+   - `proot`
+   - `bash.real`
+2. `shouldBeExecutable()` already marks both `bin` and `git-core` parent directories executable.
 
-Reason:
-- easiest UX for phone users
-- closest to seamless IDE experience
-- still safe enough inside an isolated app-private Debian environment compared with real device root
+#### Why this matters
 
-If stricter realism is preferred later, password-based sudo can become the recommended advanced mode.
+Without a new marker, users with an existing extracted `v20` runtime will never receive the repaired git, npm, and git-core payload.
+
+#### Review checks
+
+- marker constant changed to a new version
+- no regression in executable detection logic
 
 ---
 
-## Immediate next implementation slice
+### Workstream 4: preserve the backend-side npm shell fix
 
-The first implementation slice should focus on:
-1. onboarding gate before IDE launch
-2. bootstrap installer service
-3. Debian rootfs install into app-private storage
-4. default Linux workspace creation
-5. Debian shell launch proof of concept through existing terminal UI
-6. sudo onboarding choice
+**Primary file:** `android-app/android/app/src/main/java/com/theia/mobile/TheiaBackendService.kt`
 
-This slice is enough to validate the core product direction before deeper terminal refactors.
+#### Required action
+
+1. Verify the current lines that set:
+   - `npm_config_script_shell`
+   - `npm_config_shell`
+   still point to host `resolvedShell`, not Debian `effectiveShell`.
+2. If Haiku touches this file, ensure this behavior is preserved.
+
+#### Why this is verify-only right now
+
+This repo already contains the correct fix compared with the older regression path. Reverting it would make every backend-side npm lifecycle script spawn the Debian wrapper unnecessarily.
+
+#### Review checks
+
+- backend `SHELL` still points to `effectiveShell`
+- backend npm shell vars still point to `resolvedShell`
+
+---
+
+## Files outside the main scope
+
+These files should remain unchanged unless final verification shows a hard dependency:
+
+- `packages/terminal/src/node/shell-process.ts`
+- `packages/terminal/src/node/shell-terminal-server.ts`
+- `packages/process/src/node/terminal-process.ts`
+- `android-app/android/app/src/main/java/com/theia/mobile/TheiaBackendConfig.kt`
+
+Rationale: current review shows these pieces are already aligned with the desired Debian-first routing and are not the primary cause of the broken terminal.
+
+---
+
+## Ordered implementation sequence for Haiku
+
+1. Update `build-runtime-assets.mjs`.
+2. Update `BootstrapInstallerService.kt` wrapper and shell profile generation.
+3. Bump the extraction marker in `AssetExtractor.kt`.
+4. Verify `TheiaBackendService.kt` still preserves the host npm shell configuration.
+5. Regenerate runtime assets locally.
+6. Validate asset layout before building the APK.
+7. Build and install the debug APK.
+8. Run on-device acceptance checks.
+9. Capture exact failures if any command still resolves to Android or misses SSL.
+
+---
+
+## Pre-build validation checklist
+
+After `node products/theia-android-lite/scripts/build-runtime-assets.mjs`:
+
+1. `android-app/android/app/src/main/assets/runtime/bin/git` exists.
+2. `android-app/android/app/src/main/assets/runtime/bin/npm` exists.
+3. `android-app/android/app/src/main/assets/runtime/bin/npx` exists.
+4. `android-app/android/app/src/main/assets/runtime/bin/python3` exists.
+5. `android-app/android/app/src/main/assets/runtime/bin/lib/node_modules/npm/bin/npm-cli.js` exists.
+6. `android-app/android/app/src/main/assets/runtime/bin/libexec/git-core` exists.
+7. `find android-app/android/app/src/main/assets/runtime/bin/libexec/git-core -type l | wc -l` returns `0`.
+8. `find android-app/android/app/src/main/assets/runtime/bin/libexec/git-core -type f | wc -l` returns the copied helper set and not an empty directory.
+9. `head -1 android-app/android/app/src/main/assets/runtime/bin/libexec/git-core/git-submodule` shows `/bin/sh` or another normalized path, not a Termux path.
+10. `file android-app/android/app/src/main/assets/runtime/bin/libexec/git-core/git-remote-https` reports a real binary or copied helper file, not a tiny wrapper script.
+
+---
+
+## Build and device validation sequence
+
+### Build sequence
+
+```bash
+cd /home/muhammad-taha/Downloads/DevPocket/DevPocket App
+npm run build
+cd products/theia-android-lite
+npm run bundle
+node scripts/build-runtime-assets.mjs
+cd ../../android-app/android
+./gradlew clean assembleDebug
+```
+
+### Deploy sequence
+
+```bash
+adb uninstall com.theia.mobile
+adb install app/build/outputs/apk/debug/app-debug.apk
+```
+
+### On-device acceptance tests
+
+Run these inside the DevPocket terminal:
+
+```bash
+cat /etc/os-release
+echo $PATH
+which git
+git --version
+which node
+node --version
+which npm
+npm --version
+which python3
+python3 --version
+git --exec-path
+apt update
+git clone https://github.com/octocat/Hello-World.git
+mkdir -p /home/devpocket/test-npm && cd /home/devpocket/test-npm
+npm init -y
+npm install express
+```
+
+### Expected outcomes
+
+1. `/etc/os-release` identifies Debian.
+2. `PATH` begins with `/opt/devpocket/bin`.
+3. `git --exec-path` points to `/opt/devpocket/bin/libexec/git-core`.
+4. `git clone` over HTTPS succeeds without the old helper failure.
+5. `apt update` succeeds inside Debian.
+6. `npm init` and `npm install express` succeed without spawning the Android fallback shell.
+
+---
+
+## Review checklist I will use after Haiku finishes
+
+### Code review gate
+
+1. No Android fallback shell remains inside `devpocket-shell`.
+2. Runtime bind mounts are explicit and complete.
+3. Git helpers are real copied files, not wrappers.
+4. Shebang normalization is synchronous, deterministic, and limited to script-like files.
+5. Marker version bump is present.
+6. Backend npm shell fix was preserved.
+
+### Runtime audit gate
+
+1. assembled runtime contains the restored binaries and helper directories
+2. git-core symlinks are fully resolved
+3. SSL bundle path is consistent across wrapper and `.bashrc`
+4. runtime extraction actually occurs on upgraded installs
+
+### Device behavior gate
+
+1. terminal always opens into Debian
+2. no visible Android host shell fallback occurs
+3. core developer workflows work:
+   - `git clone`
+   - `apt update`
+   - `npm install`
+
+---
+
+## Explicit non-goals for this task
+
+1. Moving the Theia backend inside Debian.
+2. Redesigning onboarding screens.
+3. Adding new package management UI flows.
+4. Expanding the runtime to ship compilers or every utility by default.
+5. Refactoring TypeScript terminal layers unless a post-fix bug proves it is necessary.
+
+---
+
+## Final handoff statement for Haiku
+
+Implement only the Debian terminal completion work described above. Treat `build-runtime-assets.mjs` and `BootstrapInstallerService.kt` as the primary repair points, `AssetExtractor.kt` as the upgrade-delivery guard, and `TheiaBackendService.kt` as a verify-only file whose current npm shell behavior must remain intact.

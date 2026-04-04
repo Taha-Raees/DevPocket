@@ -245,8 +245,8 @@ class TheiaBackendService : Service() {
         val effectiveShell = env["THEIA_SHELL"]?.takeIf { it.isNotBlank() } ?: resolvedShell
         env["SHELL"] = effectiveShell
         env["THEIA_SHELL"] = effectiveShell
-        env["npm_config_script_shell"] = effectiveShell
-        env["npm_config_shell"] = effectiveShell
+        env["npm_config_script_shell"] = resolvedShell
+        env["npm_config_shell"] = resolvedShell
         // Fix webview rendering: use same-origin pattern instead of subdomain-based
         env["THEIA_WEBVIEW_EXTERNAL_ENDPOINT"] = "{{hostname}}"
         // Android strict inotify limits cause "Unable to watch for file changes"

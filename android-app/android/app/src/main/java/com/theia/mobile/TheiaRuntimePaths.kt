@@ -21,7 +21,7 @@ object TheiaRuntimePaths {
         File(runtimeRoot(context), "theia-android-lite/lib/backend/main.js")
 
     fun nodeBinary(context: Context): File =
-        File(runtimeRoot(context), "bin/node-wrapper")
+        File(runtimeRoot(context), "bin/node")
 
     fun configDir(context: Context): File =
         File(context.filesDir, ".theia-android-lite")

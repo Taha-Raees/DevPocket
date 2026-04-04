@@ -62,6 +62,27 @@ export class ShellProcess extends TerminalProcess {
         @inject(EnvironmentUtils) environmentUtils: EnvironmentUtils,
     ) {
         const env = { 'COLORTERM': 'truecolor' };
+        // When proot is active the node-pty cwd must be a real Android-side path that
+        // exists before exec. Use the Debian home dir (which lives on Android's filesystem
+        // under debianRoot/home/<user>) so node-pty can always chdir successfully.
+        // proot's own -w flag then sets the working directory *inside* the guest.
+        const cwd = (() => {
+            const debianRoot = process.env.DEVPOCKET_DEBIAN_ROOT;
+            const debianUser = process.env.DEVPOCKET_USER;
+            if (debianRoot && debianUser) {
+                const path = require('path') as typeof import('path');
+                const fs = require('fs') as typeof import('fs');
+                const debianHome = path.join(debianRoot, 'home', debianUser);
+                if (fs.existsSync(debianHome)) {
+                    return debianHome;
+                }
+                // Fallback: debianRoot itself always exists if onboarding completed
+                if (fs.existsSync(debianRoot)) {
+                    return debianRoot;
+                }
+            }
+            return getRootPath(options.rootURI);
+        })();
         super(<TerminalProcessOptions>{
             command: options.shell || ShellProcess.getShellExecutablePath(),
             args: options.args || ShellProcess.getShellExecutableArgs(),
@@ -69,7 +90,7 @@ export class ShellProcess extends TerminalProcess {
                 name: 'xterm-256color',
                 cols: options.cols || ShellProcess.defaultCols,
                 rows: options.rows || ShellProcess.defaultRows,
-                cwd: getRootPath(options.rootURI),
+                cwd,
                 env: options.strictEnv !== true ? Object.assign(env, environmentUtils.mergeProcessEnv(options.env)) : Object.assign(env, options.env),
             },
             isPseudo: options.isPseudo,
