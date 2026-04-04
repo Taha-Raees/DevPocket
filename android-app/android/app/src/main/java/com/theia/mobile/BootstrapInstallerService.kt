@@ -491,9 +491,9 @@ class BootstrapInstallerService(private val context: Context) {
             val sourcesListDir = File(debianDir, "etc/apt")
             sourcesListDir.mkdirs()
             val sourcesContent = """
-                deb [trusted=yes] http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
-                deb [trusted=yes] http://deb.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
-                deb [trusted=yes] http://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
+                deb [trusted=yes] http://deb.debian.org/debian bullseye main contrib non-free
+                deb [trusted=yes] http://deb.debian.org/debian-security bullseye-security main contrib
+                deb [trusted=yes] http://deb.debian.org/debian bullseye-updates main contrib
             """.trimIndent()
             File(sourcesListDir, "sources.list").writeText(sourcesContent + "\n")
             
@@ -566,9 +566,9 @@ echo "Installing Debian archive keyring..."
 apt update && apt install -y debian-archive-keyring
 # Rewrite sources.list without [trusted=yes]
 cat > /etc/apt/sources.list << 'EOF'
-deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
-deb http://deb.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
-deb http://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
+deb http://deb.debian.org/debian bullseye main contrib non-free
+deb http://deb.debian.org/debian-security bullseye-security main contrib
+deb http://deb.debian.org/debian bullseye-updates main contrib
 EOF
 apt update
 echo "Done! GPG keys installed and sources.list updated."
@@ -727,7 +727,7 @@ export TERM=xterm-256color
 export COLORTERM=truecolor
 export LC_ALL=C.UTF-8
 export LANG=C.UTF-8
-export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+export PATH="${'$'}{DEVPOCKET_RUNTIME_BIN}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 export PROOT_TMP_DIR="${'$'}{DEVPOCKET_APP_CACHE}/proot-tmp"
 export PROOT_NO_SECCOMP=1
 
@@ -830,9 +830,9 @@ fi
 
 # 3) Write sources.list with [trusted=yes]
 cat > "${'$'}{DEBIAN_ROOT}/etc/apt/sources.list" << 'SOURCES_EOF'
-deb [trusted=yes] http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
-deb [trusted=yes] http://deb.debian.org/debian-security bookworm-security main contrib
-deb [trusted=yes] http://deb.debian.org/debian bookworm-updates main contrib
+deb [trusted=yes] http://deb.debian.org/debian bullseye main contrib non-free
+deb [trusted=yes] http://deb.debian.org/debian-security bullseye-security main contrib
+deb [trusted=yes] http://deb.debian.org/debian bullseye-updates main contrib
 SOURCES_EOF
 
 # 4) APT config: allow insecure repos
@@ -941,7 +941,7 @@ exec "${'$'}PROOT_BIN" \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
     DEBIAN_FRONTEND=noninteractive \
-    PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+    PATH="${'$'}{DEVPOCKET_RUNTIME_BIN}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
     LD_PRELOAD="${'$'}PROOT_LD_PRELOAD" \
   /bin/bash ${'$'}_BASH_OPTS "$@"
 """

@@ -61,6 +61,84 @@ This project has a comprehensive memory system at `.claude/projects/-home-...-De
 
 ---
 
+## Recent Changes (2026-04-04)
+
+### ✅ FIXED: Debian Environment Critical Issues
+
+**Problem:** Debian 11 (bullseye) rootfs was configured with Debian 12 (bookworm) repositories, causing ALL apt operations to fail with dependency conflicts. Additionally, the terminal PATH was missing runtime binaries and proot-getcwd.so was not properly bundled.
+
+**Fixes Applied:**
+
+1. **Debian version mismatch fixed** - Changed `bookworm` → `bullseye` in `sources.list` generation:
+   - [`BootstrapInstallerService.kt:493-495`](android-app/android/app/src/main/java/com/theia/mobile/BootstrapInstallerService.kt) - Installation-time sources.list
+   - [`BootstrapInstallerService.kt:569-571`](android-app/android/app/src/main/java/com/theia/mobile/BootstrapInstallerService.kt) - Setup keys script
+   - [`BootstrapInstallerService.kt:832-834`](android-app/android/app/src/main/java/com/theia/mobile/BootstrapInstallerService.kt) - Shell wrapper sources.list
+
+2. **Runtime PATH fixed** - Added `${DEVPOCKET_RUNTIME_BIN}` to PATH in devpocket-shell wrapper:
+   - [`BootstrapInstallerService.kt:730`](android-app/android/app/src/main/java/com/theia/mobile/BootstrapInstallerService.kt) - Shell export PATH
+   - [`BootstrapInstallerService.kt:944`](android-app/android/app/src/main/java/com/theia/mobile/BootstrapInstallerService.kt) - proot env PATH
+
+3. **proot-getcwd.so already bundled** - Confirmed shim exists at [`products/theia-android-lite/proot-shims/proot-getcwd.so`](products/theia-android-lite/proot-shims/proot-getcwd.so) and is copied by build script
+
+**Impact:**
+- `apt-get update` will now succeed (matching bullseye repositories)
+- `apt-get install git` will work after update
+- node/npm binaries now in PATH inside Debian shell
+- dpkg operations should work with proot-getcwd.so LD_PRELOAD
+
+### ✅ ADDED: GitHub Actions CI/CD Pipeline
+
+**New file:** [`.github/workflows/build-and-release.yml`](.github/workflows/build-and-release.yml)
+
+**Features:**
+- Automatic APK build on push to main/master/dev branches
+- Full build pipeline: npm install → TypeScript build → webpack bundle → runtime assets → Gradle APK
+- Downloads proot binary from upstream during build
+- Creates GitHub Release with APK attachment on main/master pushes
+- Manual trigger support via workflow_dispatch
+- 45-minute timeout, artifact retention for 30 days
+
+---
+
+## Recent Changes (2026-04-04)
+
+### ✅ FIXED: Debian Environment Critical Issues
+
+**Problem:** Debian 11 (bullseye) rootfs was configured with Debian 12 (bookworm) repositories, causing ALL apt operations to fail with dependency conflicts. Additionally, the terminal PATH was missing runtime binaries and proot-getcwd.so was not properly bundled.
+
+**Fixes Applied:**
+
+1. **Debian version mismatch fixed** - Changed `bookworm` → `bullseye` in `sources.list` generation:
+   - [`BootstrapInstallerService.kt:493-495`](android-app/android/app/src/main/java/com/theia/mobile/BootstrapInstallerService.kt) - Installation-time sources.list
+   - [`BootstrapInstallerService.kt:569-571`](android-app/android/app/src/main/java/com/theia/mobile/BootstrapInstallerService.kt) - Setup keys script
+   - [`BootstrapInstallerService.kt:832-834`](android-app/android/app/src/main/java/com/theia/mobile/BootstrapInstallerService.kt) - Shell wrapper sources.list
+
+2. **Runtime PATH fixed** - Added `${DEVPOCKET_RUNTIME_BIN}` to PATH in devpocket-shell wrapper:
+   - [`BootstrapInstallerService.kt:730`](android-app/android/app/src/main/java/com/theia/mobile/BootstrapInstallerService.kt) - Shell export PATH
+   - [`BootstrapInstallerService.kt:944`](android-app/android/app/src/main/java/com/theia/mobile/BootstrapInstallerService.kt) - proot env PATH
+
+3. **proot-getcwd.so already bundled** - Confirmed shim exists at [`products/theia-android-lite/proot-shims/proot-getcwd.so`](products/theia-android-lite/proot-shims/proot-getcwd.so) and is copied by build script
+
+**Impact:**
+- `apt-get update` will now succeed (matching bullseye repositories)
+- `apt-get install git` will work after update
+- node/npm binaries now in PATH inside Debian shell
+- dpkg operations should work with proot-getcwd.so LD_PRELOAD
+
+### ✅ ADDED: GitHub Actions CI/CD Pipeline
+
+**New file:** [`.github/workflows/build-and-release.yml`](.github/workflows/build-and-release.yml)
+
+**Features:**
+- Automatic APK build on push to main/master/dev branches
+- Full build pipeline: npm install → TypeScript build → webpack bundle → runtime assets → Gradle APK
+- Downloads proot binary from upstream during build
+- Creates GitHub Release with APK attachment on main/master pushes
+- Manual trigger support via workflow_dispatch
+- 45-minute timeout, artifact retention for 30 days
+
+---
+
 ## Recent Changes (2026-03-31)
 
 ### ⚠️ IN PROGRESS: Debian-First Terminal Onboarding
