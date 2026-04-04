@@ -49,6 +49,16 @@ jobs:
         working-directory: products/theia-android-lite
         run: npm run bundle
 
+      - name: Download Termux runtime binaries
+        run: |
+          chmod +x scripts/download-node-android.sh
+          ./scripts/download-node-android.sh aarch64
+
+      - name: Download Termux runtime binaries
+        run: |
+          chmod +x scripts/download-node-android.sh
+          ./scripts/download-node-android.sh aarch64
+
       - name: Download proot binary
         run: |
           mkdir -p runtime/bin/android-aarch64
