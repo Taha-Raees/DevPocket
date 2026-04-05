@@ -119,9 +119,13 @@ class TheiaBackendService : Service() {
             val outThread = streamToLog("stdout", backendProcess!!.inputStream)
             val errThread = streamToLog("stderr", backendProcess!!.errorStream)
 
-            val healthy = PortAllocator.waitForHttpReady("127.0.0.1", selectedPort, 60_000L)
+            val healthTimeout = 300_000L
+            logLine("Waiting for backend health check (timeout: ${healthTimeout / 1000}s)")
+            val healthy = PortAllocator.waitForHttpReady("127.0.0.1", selectedPort, healthTimeout)
             if (!healthy) {
-                logLine("Backend health check timed out on port $selectedPort")
+                logLine("Backend health check timed out on port $selectedPort after ${healthTimeout / 1000}s")
+            } else {
+                logLine("Backend health check passed on port $selectedPort")
             }
 
             val exit = backendProcess!!.waitFor()
