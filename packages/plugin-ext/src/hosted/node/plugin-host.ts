@@ -53,18 +53,7 @@ function sanitizeCommandPath(command: string): string {
     return command;
 }
 
-const backendInDebian = process.env.DEVPOCKET_BACKEND_IN_DEBIAN === '1';
 const runtimeBin = process.env.THEIA_ANDROID_RUNTIME_BIN;
-
-function shouldPreserveAndroidLoader(command: string): boolean {
-    if (command === process.execPath) {
-        return true;
-    }
-    if (runtimeBin && command.startsWith(`${runtimeBin}/`)) {
-        return true;
-    }
-    return false;
-}
 
 const originalUserInfo = os.userInfo.bind(os);
 (os as typeof os & { userInfo: typeof os.userInfo }).userInfo = ((options?: { encoding?: string }) => {
@@ -105,7 +94,7 @@ if (!process.env.npm_config_script_shell) {
 const originalSpawn = cp.spawn;
 const originalSpawnSync = cp.spawnSync;
 
-function patchSpawnOptions(command: string, options: cp.SpawnOptions = {}): cp.SpawnOptions {
+function patchSpawnOptions(_command: string, options: cp.SpawnOptions = {}): cp.SpawnOptions {
     const resolved = options;
     if (typeof resolved.shell === 'string') {
         resolved.shell = sanitizeShellPath(resolved.shell);
@@ -128,12 +117,6 @@ function patchSpawnOptions(command: string, options: cp.SpawnOptions = {}): cp.S
     if (!env.npm_config_script_shell) {
         env.npm_config_script_shell = env.SHELL;
     }
-    if (backendInDebian && !shouldPreserveAndroidLoader(command)) {
-        delete env.LD_LIBRARY_PATH;
-        delete env.GIT_EXEC_PATH;
-        delete env.THEIA_ANDROID_RUNTIME_LIB;
-    }
-    // Help extensions detect terminal capabilities on Android pipe-based terminals
     if (!env.TERM) {
         env.TERM = 'xterm-256color';
     }
@@ -150,7 +133,7 @@ function patchSpawnOptions(command: string, options: cp.SpawnOptions = {}): cp.S
     return resolved;
 }
 
-function patchSpawnSyncOptions(command: string, options: cp.SpawnSyncOptions = {}): cp.SpawnSyncOptions {
+function patchSpawnSyncOptions(_command: string, options: cp.SpawnSyncOptions = {}): cp.SpawnSyncOptions {
     const resolved = options;
     if (typeof resolved.shell === 'string') {
         resolved.shell = sanitizeShellPath(resolved.shell);
@@ -172,11 +155,6 @@ function patchSpawnSyncOptions(command: string, options: cp.SpawnSyncOptions = {
     }
     if (!env.npm_config_script_shell) {
         env.npm_config_script_shell = env.SHELL;
-    }
-    if (backendInDebian && !shouldPreserveAndroidLoader(command)) {
-        delete env.LD_LIBRARY_PATH;
-        delete env.GIT_EXEC_PATH;
-        delete env.THEIA_ANDROID_RUNTIME_LIB;
     }
     if (!env.TERM) {
         env.TERM = 'xterm-256color';

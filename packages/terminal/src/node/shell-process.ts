@@ -5,7 +5,7 @@
 // terms of the Eclipse Public License v. 2.0 which is available at
 // http://www.eclipse.org/legal/epl-2.0.
 //
-// This Source Code may also be made available under the following Secondary
+// This Source Code may be made available under the following Secondary
 // Licenses when the conditions for such availability set forth in the Eclipse
 // Public License v. 2.0 are satisfied: GNU General Public License, version 2
 // with the GNU Classpath Exception which is available at
@@ -54,7 +54,7 @@ export class ShellProcess extends TerminalProcess {
     protected static defaultCols = 80;
     protected static defaultRows = 24;
 
-    constructor( // eslint-disable-next-line @typescript-eslint/indent
+    constructor(
         @inject(ShellProcessOptions) options: ShellProcessOptions,
         @inject(ProcessManager) processManager: ProcessManager,
         @inject(MultiRingBuffer) ringBuffer: MultiRingBuffer,
@@ -63,15 +63,6 @@ export class ShellProcess extends TerminalProcess {
     ) {
         const env = { 'COLORTERM': 'truecolor' };
         const cwd = (() => {
-            if (ShellProcess.backendRunsInsideDebian()) {
-                return process.env.DEVPOCKET_WORKSPACE
-                    || process.env.HOME
-                    || getRootPath(options.rootURI);
-            }
-
-            // When proot is active but the backend still runs on Android, node-pty cwd must be
-            // a real Android-side path that exists before exec. Use the Debian home dir on the
-            // host filesystem so node-pty can chdir successfully before the wrapper enters proot.
             const debianRoot = process.env.DEVPOCKET_DEBIAN_ROOT;
             const debianUser = process.env.DEVPOCKET_USER;
             if (debianRoot && debianUser) {
@@ -81,7 +72,6 @@ export class ShellProcess extends TerminalProcess {
                 if (fs.existsSync(debianHome)) {
                     return debianHome;
                 }
-                // Fallback: debianRoot itself always exists if onboarding completed
                 if (fs.existsSync(debianRoot)) {
                     return debianRoot;
                 }
@@ -103,23 +93,15 @@ export class ShellProcess extends TerminalProcess {
     }
 
     public static getShellExecutablePath(): string {
-        if (ShellProcess.backendRunsInsideDebian()) {
-            return process.env.THEIA_SHELL
-                || process.env.SHELL
-                || '/bin/bash';
-        }
-
         const shell = process.env.THEIA_SHELL;
         if (shell) {
             return shell;
         }
 
-        // Android/Debian Detection: Use wrapper script if Debian runtime is available
         if (process.env.DEVPOCKET_DEBIAN_ROOT) {
             const path = require('path');
             const debianBin = path.join(process.env.DEVPOCKET_DEBIAN_ROOT, 'bin', 'devpocket-shell');
             try {
-                // Check if wrapper exists and is executable
                 const fs = require('fs');
                 const stats = fs.statSync(debianBin);
                 if (stats.isFile() && (stats.mode & 0o100)) {
@@ -138,16 +120,11 @@ export class ShellProcess extends TerminalProcess {
     }
 
     public static getShellExecutableArgs(): string[] {
-        if (ShellProcess.backendRunsInsideDebian()) {
-            return [];
-        }
-
         const args = process.env.THEIA_SHELL_ARGS;
         if (args) {
             return parseArgs(args);
         }
 
-        // Android/Debian: No special args needed for wrapper script
         if (process.env.DEVPOCKET_DEBIAN_ROOT) {
             return [];
         }
@@ -157,9 +134,5 @@ export class ShellProcess extends TerminalProcess {
         } else {
             return [];
         }
-    }
-
-    protected static backendRunsInsideDebian(): boolean {
-        return process.env.DEVPOCKET_BACKEND_IN_DEBIAN === '1';
     }
 }

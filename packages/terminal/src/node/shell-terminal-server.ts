@@ -75,13 +75,6 @@ export class ShellTerminalServer extends BaseTerminalServer implements IShellTer
                     options.env.LANG = 'C.UTF-8';
                 }
 
-                if (process.env.DEVPOCKET_BACKEND_IN_DEBIAN === '1') {
-                    options.env.DEVPOCKET_BACKEND_IN_DEBIAN = '1';
-                    delete options.env.LD_LIBRARY_PATH;
-                    delete options.env.GIT_EXEC_PATH;
-                    delete options.env.THEIA_ANDROID_RUNTIME_LIB;
-                }
-
                 this.applyToProcessEnvironment(URI.fromFilePath(getRootPath(options.rootURI)), options.env);
             }
             const term = this.shellFactory(options);
