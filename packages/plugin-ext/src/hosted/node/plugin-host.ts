@@ -40,7 +40,6 @@ console.log('[android-lite][plugin-host] runtime diagnostics', {
 });
 
 function resolveShellFallback(): string {
-    const debianRoot = process.env.DEVPOCKET_DEBIAN_ROOT;
     const termuxPrefix = process.env.DEVPOCKET_TERMUX_PREFIX;
     return process.env.THEIA_SHELL
         || process.env.SHELL
