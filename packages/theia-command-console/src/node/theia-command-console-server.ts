@@ -186,14 +186,21 @@ export class TheiaCommandConsoleServer implements CommandConsoleServer {
         }
 
         const runtimeBin = process.env.THEIA_ANDROID_RUNTIME_BIN;
-        if (runtimeBin) {
+        if (runtimeBin && process.env.DEVPOCKET_BACKEND_IN_DEBIAN !== '1') {
             env.PATH = `${runtimeBin}${path.delimiter}${env.PATH ?? ''}`;
+        }
+        if (process.env.DEVPOCKET_BACKEND_IN_DEBIAN === '1') {
+            delete env.LD_LIBRARY_PATH;
+            delete env.GIT_EXEC_PATH;
+            delete env.THEIA_ANDROID_RUNTIME_LIB;
         }
         return env;
     }
 
     protected async resolveShell(): Promise<string> {
-        const shellCandidates = process.platform === 'android'
+        const shellCandidates = process.env.DEVPOCKET_BACKEND_IN_DEBIAN === '1'
+            ? [process.env.THEIA_SHELL, process.env.SHELL, '/bin/bash', '/bin/sh']
+            : process.platform === 'android'
             ? ['/system/bin/sh', process.env.SHELL, '/bin/sh']
             : [process.env.SHELL, '/bin/bash', '/bin/sh'];
 

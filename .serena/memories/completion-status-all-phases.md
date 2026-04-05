@@ -195,12 +195,11 @@
    - `HealthCheckResult`: Tracks backend and Debian health separately
    - `performHealthCheck()`: Tests backend connectivity + Debian validation
 
-**Architecture Decision (LOCKED):**
-- **Option A (MVP - Selected):** Backend runs OUTSIDE Debian
-  - Simpler deployment, reuses existing Node.js binary
-  - Terminal sessions spawn inside Debian (via devpocket-shell)
-  - Can migrate to inside Debian later (Phase 8B) without breaking MVP
-- **Option B (Post-Stability):** Backend inside Debian (future consideration)
+**Architecture Update (2026-04-04):**
+- Preferred runtime now launches the backend inside Debian through `devpocket-shell`
+- Bundled runtime is bind-mounted into Debian at `/opt/devpocket`
+- Host runtime remains the fallback path if Debian validation fails
+- Terminal, shell-task, command-console, and plugin-host child process paths now clear host `LD_LIBRARY_PATH` when running Debian user commands
 
 ---
 
@@ -483,4 +482,3 @@ This implementation represents a complete, production-ready architecture for tra
 **Time to Stable:** 10-11 weeks (Phase 13-15 rollout)  
 
 All 15 phases are now complete and documented. 🎯
-

@@ -1,10 +1,9 @@
 /**
  * Phase 8: Theia Backend Integration
- * Manages backend lifecycle and Debian-aware configuration
- * 
- * ARCHITECTURE DECISION: Backend runs OUTSIDE Debian (Option A - MVP)
- * Rationale: Simpler deployment, reuses existing Node.js binary, allows easy upgrade
- * Future: Can migrate to inside Debian after stability achieved (Phase 8B)
+ * Manages backend lifecycle and Debian-aware configuration.
+ *
+ * Preferred runtime: launch the backend inside Debian via `devpocket-shell`.
+ * Host runtime launch remains as the fallback path when Debian is unavailable.
  */
 
 package com.theia.mobile
@@ -24,9 +23,9 @@ object TheiaBackendConfig {
     const val BACKEND_STARTUP_TIMEOUT_MS = 30000L
     const val BACKEND_HEALTH_CHECK_INTERVAL_MS = 1000L
     
-    // Debian Integration (Backend Awareness)
-    // Backend runs outside Debian but IS AWARE of Debian environment
-    // Only shell sessions actually execute inside Debian (via devpocket-shell wrapper)
+    // Host-mode fallback configuration.
+    // When Debian launch is unavailable the backend still runs in the host runtime,
+    // but terminals are routed through the Debian wrapper.
     
     fun getBackendEnvironmentVariables(context: Context): Map<String, String> {
         val env = mutableMapOf<String, String>()
@@ -75,8 +74,7 @@ object TheiaBackendConfig {
         val stateManager = OnboardingStateManager(context)
         
         if (!stateManager.isOnboardingComplete()) {
-            // Debian not required for basic operation
-            Log.w(TAG, "Debian not installed - terminal will use host shell only")
+            Log.w(TAG, "Debian not installed - backend will fall back to host runtime")
             return true
         }
         

@@ -62,11 +62,16 @@ export class ShellProcess extends TerminalProcess {
         @inject(EnvironmentUtils) environmentUtils: EnvironmentUtils,
     ) {
         const env = { 'COLORTERM': 'truecolor' };
-        // When proot is active the node-pty cwd must be a real Android-side path that
-        // exists before exec. Use the Debian home dir (which lives on Android's filesystem
-        // under debianRoot/home/<user>) so node-pty can always chdir successfully.
-        // proot's own -w flag then sets the working directory *inside* the guest.
         const cwd = (() => {
+            if (ShellProcess.backendRunsInsideDebian()) {
+                return process.env.DEVPOCKET_WORKSPACE
+                    || process.env.HOME
+                    || getRootPath(options.rootURI);
+            }
+
+            // When proot is active but the backend still runs on Android, node-pty cwd must be
+            // a real Android-side path that exists before exec. Use the Debian home dir on the
+            // host filesystem so node-pty can chdir successfully before the wrapper enters proot.
             const debianRoot = process.env.DEVPOCKET_DEBIAN_ROOT;
             const debianUser = process.env.DEVPOCKET_USER;
             if (debianRoot && debianUser) {
@@ -98,6 +103,12 @@ export class ShellProcess extends TerminalProcess {
     }
 
     public static getShellExecutablePath(): string {
+        if (ShellProcess.backendRunsInsideDebian()) {
+            return process.env.THEIA_SHELL
+                || process.env.SHELL
+                || '/bin/bash';
+        }
+
         const shell = process.env.THEIA_SHELL;
         if (shell) {
             return shell;
@@ -127,6 +138,10 @@ export class ShellProcess extends TerminalProcess {
     }
 
     public static getShellExecutableArgs(): string[] {
+        if (ShellProcess.backendRunsInsideDebian()) {
+            return [];
+        }
+
         const args = process.env.THEIA_SHELL_ARGS;
         if (args) {
             return parseArgs(args);
@@ -142,5 +157,9 @@ export class ShellProcess extends TerminalProcess {
         } else {
             return [];
         }
+    }
+
+    protected static backendRunsInsideDebian(): boolean {
+        return process.env.DEVPOCKET_BACKEND_IN_DEBIAN === '1';
     }
 }

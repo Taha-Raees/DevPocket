@@ -122,6 +122,12 @@ export class ProcessTaskRunner implements TaskRunner {
                 ...process.env,
                 ...(options.env || {})
             };
+
+            if (process.env.DEVPOCKET_BACKEND_IN_DEBIAN === '1') {
+                delete options.env.LD_LIBRARY_PATH;
+                delete options.env.GIT_EXEC_PATH;
+                delete options.env.THEIA_ANDROID_RUNTIME_LIB;
+            }
         }
 
         /** Executable to actually spawn. */

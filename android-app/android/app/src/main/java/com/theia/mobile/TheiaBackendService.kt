@@ -48,6 +48,26 @@ class TheiaBackendService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private lateinit var fileLogger: RotatingFileLogger
 
+    private data class BackendLaunchContext(
+        val hostWorkspace: File,
+        val hostExtensionsDir: File,
+        val hostNode: File,
+        val hostEntrypoint: File,
+        val hostRuntimeRoot: File,
+        val hostConfigDir: File,
+        val hostOvsxConfig: File,
+        val guestWorkspace: String,
+        val guestExtensionsDir: String,
+        val guestNode: String,
+        val guestEntrypoint: String,
+        val guestProjectRoot: String,
+        val guestConfigDir: String,
+        val guestRuntimeBin: String,
+        val guestRuntimeLib: String,
+        val guestOvsxConfig: String,
+        val guestCaCertPath: String,
+    )
+
     override fun onCreate() {
         super.onCreate()
         fileLogger = RotatingFileLogger(this, "theia-backend")
@@ -127,34 +147,73 @@ class TheiaBackendService : Service() {
 
     @Throws(IOException::class)
     private fun createProcessBuilder(port: Int): ProcessBuilder {
-        val node = TheiaRuntimePaths.nodeBinary(this)
-        val entry = TheiaRuntimePaths.backendEntrypoint(this)
-        if (!node.exists()) {
-            throw IOException("Missing node binary at ${node.absolutePath}")
+        val launchContext = prepareBackendLaunchContext()
+        val onboardingManager = OnboardingStateManager(this)
+        val onboardingConfig = onboardingManager.getConfig()
+        val debianReady = onboardingManager.isOnboardingComplete() &&
+            !onboardingConfig.username.isNullOrBlank() &&
+            TheiaBackendConfig.validateDebianSetup(this)
+
+        return if (debianReady) {
+            val username = onboardingConfig.username ?: "devpocket"
+            logLine("Launching backend inside Debian as $username")
+            createDebianProcessBuilder(port, username, launchContext)
+        } else {
+            logLine("Launching backend in host runtime")
+            createHostProcessBuilder(port, launchContext)
         }
-        if (!entry.exists()) {
-            throw IOException("Missing backend entrypoint at ${entry.absolutePath}")
+    }
+
+    @Throws(IOException::class)
+    private fun prepareBackendLaunchContext(): BackendLaunchContext {
+        val hostNode = TheiaRuntimePaths.nodeBinary(this)
+        val hostEntrypoint = TheiaRuntimePaths.backendEntrypoint(this)
+        if (!hostNode.exists()) {
+            throw IOException("Missing node binary at ${hostNode.absolutePath}")
+        }
+        if (!hostEntrypoint.exists()) {
+            throw IOException("Missing backend entrypoint at ${hostEntrypoint.absolutePath}")
         }
 
-        // Resolve IDE workspace location:
-        // 1. Primary: app-private Debian home (new model)
-        // 2. Fallback: external shared storage (legacy)
-        val devPocketWorkspace = TheiaRuntimePaths.getIdeWorkspace(this)
-        if (!devPocketWorkspace.exists()) {
-            devPocketWorkspace.mkdirs()
+        val hostWorkspace = TheiaRuntimePaths.getIdeWorkspace(this)
+        if (!hostWorkspace.exists()) {
+            hostWorkspace.mkdirs()
         }
-        
-        logLine("IDE workspace resolved to: ${devPocketWorkspace.absolutePath}")
 
-        // Ensure bundled extensions from APK assets are extracted (unpacked) in the extensions directory.
-        // Theia treats --plugins / THEIA_DEFAULT_PLUGINS as system plugins and system plugins
-        // must be pre-unpacked directories — .vsix files are only auto-extracted for user plugins.
+        val hostConfigDir = TheiaRuntimePaths.configDir(this)
+        hostConfigDir.mkdirs()
+
+        val hostExtensionsDir = ensureBundledExtensionsExtracted()
+
+        logLine("IDE workspace resolved to: ${hostWorkspace.absolutePath}")
+
+        return BackendLaunchContext(
+            hostWorkspace = hostWorkspace,
+            hostExtensionsDir = hostExtensionsDir,
+            hostNode = hostNode,
+            hostEntrypoint = hostEntrypoint,
+            hostRuntimeRoot = TheiaRuntimePaths.runtimeRoot(this),
+            hostConfigDir = hostConfigDir,
+            hostOvsxConfig = TheiaRuntimePaths.ovsxRouterConfig(this),
+            guestWorkspace = TheiaRuntimePaths.debianGuestWorkspace(this),
+            guestExtensionsDir = TheiaRuntimePaths.debianGuestExtensionsDir(),
+            guestNode = TheiaRuntimePaths.debianGuestNodeBinary(),
+            guestEntrypoint = TheiaRuntimePaths.debianGuestBackendEntrypoint(),
+            guestProjectRoot = TheiaRuntimePaths.debianGuestProjectRoot(),
+            guestConfigDir = TheiaRuntimePaths.debianGuestConfigDir(),
+            guestRuntimeBin = TheiaRuntimePaths.debianGuestRuntimeBin(),
+            guestRuntimeLib = TheiaRuntimePaths.debianGuestRuntimeLib(),
+            guestOvsxConfig = TheiaRuntimePaths.debianGuestOvsxRouterConfig(),
+            guestCaCertPath = TheiaRuntimePaths.debianGuestCaCertPath(),
+        )
+    }
+
+    private fun ensureBundledExtensionsExtracted(): File {
         val bundledExtDir = File(TheiaRuntimePaths.runtimeRoot(this), "extensions")
         val userExtDir = TheiaRuntimePaths.extensionsRoot(this)
         if (bundledExtDir.exists() && bundledExtDir.isDirectory) {
             userExtDir.mkdirs()
             bundledExtDir.listFiles()?.filter { it.name.endsWith(".vsix") }?.forEach { vsix ->
-                // Extract the vsix (ZIP) into a named directory so Theia finds an unpacked extension
                 val extName = vsix.nameWithoutExtension
                 val destDir = File(userExtDir, extName)
                 if (!destDir.exists()) {
@@ -164,7 +223,6 @@ class TheiaBackendService : Service() {
                         val zipIn = java.util.zip.ZipInputStream(vsix.inputStream().buffered())
                         var entry = zipIn.nextEntry
                         while (entry != null) {
-                            // vsix files have entries under "extension/" prefix
                             val outFile = File(destDir, entry.name)
                             if (entry.isDirectory) {
                                 outFile.mkdirs()
@@ -186,59 +244,56 @@ class TheiaBackendService : Service() {
                 }
             }
         }
+        return userExtDir
+    }
 
+    private fun createHostProcessBuilder(port: Int, launchContext: BackendLaunchContext): ProcessBuilder {
         val command = mutableListOf(
-            node.absolutePath,
-            entry.absolutePath,
-            devPocketWorkspace.absolutePath,
+            launchContext.hostNode.absolutePath,
+            launchContext.hostEntrypoint.absolutePath,
+            launchContext.hostWorkspace.absolutePath,
             "--hostname", "127.0.0.1",
             "--port", port.toString(),
-            "--plugins=local-dir:${userExtDir.absolutePath}"
+            "--plugins=local-dir:${launchContext.hostExtensionsDir.absolutePath}"
         )
-
-        // Add OVSX router config if present
-        val ovsxConfig = TheiaRuntimePaths.ovsxRouterConfig(this)
-        if (ovsxConfig.exists()) {
-            command.add("--ovsx-router-config=${ovsxConfig.absolutePath}")
+        if (launchContext.hostOvsxConfig.exists()) {
+            command.add("--ovsx-router-config=${launchContext.hostOvsxConfig.absolutePath}")
         }
 
         val builder = ProcessBuilder(command)
-        builder.directory(TheiaRuntimePaths.runtimeRoot(this))
+        builder.directory(launchContext.hostRuntimeRoot)
 
         val env = builder.environment()
-        val runtimeBin = File(TheiaRuntimePaths.runtimeRoot(this), "bin").absolutePath
-        val runtimeLib = File(TheiaRuntimePaths.runtimeRoot(this), "lib").absolutePath
+        val runtimeBin = File(launchContext.hostRuntimeRoot, "bin").absolutePath
+        val runtimeLib = File(launchContext.hostRuntimeRoot, "lib").absolutePath
         val existingPath = env.getOrDefault("PATH", "")
         env["PATH"] = "$runtimeBin:$existingPath"
         env["LD_LIBRARY_PATH"] = runtimeLib
-        env["HOME"] = devPocketWorkspace.absolutePath
-        
-        // Debian environment (available if onboarding complete)
+        env["HOME"] = launchContext.hostWorkspace.absolutePath
+
         val onboardingManager = OnboardingStateManager(this)
         val onboardingConfig = onboardingManager.getConfig()
-        if (onboardingConfig.username != null) {
+        if (!onboardingConfig.username.isNullOrBlank()) {
             val debianRoot = File(filesDir, "linux/debian")
             if (debianRoot.exists()) {
                 env["DEVPOCKET_DEBIAN_ROOT"] = debianRoot.absolutePath
                 env["DEVPOCKET_USER"] = onboardingConfig.username
-                env["DEVPOCKET_WORKSPACE"] = devPocketWorkspace.absolutePath
+                env["DEVPOCKET_WORKSPACE"] = launchContext.hostWorkspace.absolutePath
             }
         }
-        
-        env["THEIA_DEFAULT_PLUGINS"] = "local-dir:${TheiaRuntimePaths.extensionsRoot(this).absolutePath}"
-        env["THEIA_PLUGINS"] = "local-dir:${TheiaRuntimePaths.extensionsRoot(this).absolutePath}"
+
+        env["THEIA_DEFAULT_PLUGINS"] = "local-dir:${launchContext.hostExtensionsDir.absolutePath}"
+        env["THEIA_PLUGINS"] = "local-dir:${launchContext.hostExtensionsDir.absolutePath}"
         env.putAll(TheiaBackendConfig.getBackendEnvironmentVariables(this))
         env["THEIA_ANDROID_LITE"] = "1"
         env["THEIA_ANDROID_LITE_HOME"] = filesDir.absolutePath
-        env["THEIA_CONFIG_DIR"] = TheiaRuntimePaths.configDir(this).absolutePath
-        env["THEIA_EXTENSIONS_DIR"] = TheiaRuntimePaths.extensionsRoot(this).absolutePath
+        env["THEIA_CONFIG_DIR"] = launchContext.hostConfigDir.absolutePath
+        env["THEIA_EXTENSIONS_DIR"] = launchContext.hostExtensionsDir.absolutePath
         env["THEIA_ANDROID_RUNTIME_BIN"] = runtimeBin
-        // Tell Theia where the project root is so it can find lib/frontend for static serving
-        val appProjectPath = File(TheiaRuntimePaths.runtimeRoot(this), "theia-android-lite").absolutePath
-        env["THEIA_APP_PROJECT_PATH"] = appProjectPath
-        // Bypass Termux-hardcoded openssl.cnf permissions error
+        env["THEIA_ANDROID_RUNTIME_LIB"] = runtimeLib
+        env["THEIA_APP_PROJECT_PATH"] = File(launchContext.hostRuntimeRoot, "theia-android-lite").absolutePath
         env["OPENSSL_CONF"] = "/dev/null"
-        // Force node-pty and execa children to use the Termux bash instead of /system/bin/sh
+
         val termuxBash = File(runtimeBin, "bash")
         val termuxSh = File(runtimeBin, "sh")
         val resolvedShell = if (termuxBash.exists()) termuxBash.absolutePath else if (termuxSh.exists()) termuxSh.absolutePath else "/system/bin/sh"
@@ -247,43 +302,109 @@ class TheiaBackendService : Service() {
         env["THEIA_SHELL"] = effectiveShell
         env["npm_config_script_shell"] = resolvedShell
         env["npm_config_shell"] = resolvedShell
-        // Fix webview rendering: use same-origin pattern instead of subdomain-based
         env["THEIA_WEBVIEW_EXTERNAL_ENDPOINT"] = "{{hostname}}"
-        // Android strict inotify limits cause "Unable to watch for file changes"
-        // Force chokidar to use polling instead of native OS events
         env["CHOKIDAR_USEPOLLING"] = "1"
         env["CHOKIDAR_INTERVAL"] = "1000"
-        // Prevent "Cannot move to trash" errors since Android /storage/emulated/0 lacks a valid .Trash
         env["THEIA_DISABLE_TRASH"] = "true"
 
-        // Git: set GIT_EXEC_PATH so git can find its helper commands (git-remote-https, etc.)
-        val gitExecPath = File(File(TheiaRuntimePaths.runtimeRoot(this), "bin"), "libexec/git-core").absolutePath
+        val gitExecPath = File(File(launchContext.hostRuntimeRoot, "bin"), "libexec/git-core").absolutePath
         env["GIT_EXEC_PATH"] = gitExecPath
-
-        // Git: prevent git from reading Termux's gitconfig which doesn't exist in our sandbox
         env["GIT_CONFIG_NOSYSTEM"] = "1"
-
-        // Git: set a default template dir to prevent "warning: templates not found"
         env["GIT_TEMPLATE_DIR"] = ""
 
-        // SSL: point OpenSSL and curl/git at our bundled CA certificate bundle
-        val caCertPath = File(TheiaRuntimePaths.runtimeRoot(this), "etc/ca-certificates/cacert.pem").absolutePath
-        if (File(caCertPath).exists()) {
-            env["SSL_CERT_FILE"] = caCertPath
-            env["GIT_SSL_CAINFO"] = caCertPath
-            env["NODE_EXTRA_CA_CERTS"] = caCertPath
-            env["CURL_CA_BUNDLE"] = caCertPath
+        val caCertPath = File(launchContext.hostRuntimeRoot, "etc/ca-certificates/cacert.pem")
+        if (caCertPath.exists()) {
+            env["SSL_CERT_FILE"] = caCertPath.absolutePath
+            env["GIT_SSL_CAINFO"] = caCertPath.absolutePath
+            env["NODE_EXTRA_CA_CERTS"] = caCertPath.absolutePath
+            env["CURL_CA_BUNDLE"] = caCertPath.absolutePath
         }
 
-        // npm: disable symlinks (Android sandbox restricts symlink creation)
         env["npm_config_bin_links"] = "false"
-
-        // Terminal: set TERM so programs detect terminal capabilities through the real PTY
         env["TERM"] = "xterm-256color"
         env["COLORTERM"] = "truecolor"
-
         return builder
     }
+
+    private fun createDebianProcessBuilder(port: Int, username: String, launchContext: BackendLaunchContext): ProcessBuilder {
+        val debianRoot = TheiaRuntimePaths.getDebianRoot(this)
+        BootstrapInstallerService(this).copyShellWrapperToDebianBin(debianRoot)
+
+        val wrapper = File(debianRoot, "bin/devpocket-shell")
+        if (!wrapper.exists()) {
+            throw IOException("Missing Debian shell wrapper at ${wrapper.absolutePath}")
+        }
+
+        val launchCommand = mutableListOf(
+            launchContext.guestNode,
+            launchContext.guestEntrypoint,
+            launchContext.guestWorkspace,
+            "--hostname", "127.0.0.1",
+            "--port", port.toString(),
+            "--plugins=local-dir:${launchContext.guestExtensionsDir}"
+        )
+        if (launchContext.hostOvsxConfig.exists()) {
+            launchCommand.add("--ovsx-router-config=${launchContext.guestOvsxConfig}")
+        }
+
+        val backendEnv = linkedMapOf(
+            "DEVPOCKET_BACKEND_IN_DEBIAN" to "1",
+            "DEVPOCKET_DEBIAN_ROOT" to "/",
+            "DEVPOCKET_USER" to username,
+            "DEVPOCKET_WORKSPACE" to launchContext.guestWorkspace,
+            "THEIA_DEFAULT_PLUGINS" to "local-dir:${launchContext.guestExtensionsDir}",
+            "THEIA_PLUGINS" to "local-dir:${launchContext.guestExtensionsDir}",
+            "THEIA_ANDROID_LITE" to "1",
+            "THEIA_CONFIG_DIR" to launchContext.guestConfigDir,
+            "THEIA_EXTENSIONS_DIR" to launchContext.guestExtensionsDir,
+            "THEIA_ANDROID_RUNTIME_BIN" to launchContext.guestRuntimeBin,
+            "THEIA_ANDROID_RUNTIME_LIB" to launchContext.guestRuntimeLib,
+            "THEIA_APP_PROJECT_PATH" to launchContext.guestProjectRoot,
+            "THEIA_WEBVIEW_EXTERNAL_ENDPOINT" to "{{hostname}}",
+            "THEIA_DISABLE_TRASH" to "true",
+            "CHOKIDAR_USEPOLLING" to "1",
+            "CHOKIDAR_INTERVAL" to "1000",
+            "OPENSSL_CONF" to "/dev/null",
+            "SHELL" to "/bin/bash",
+            "THEIA_SHELL" to "/bin/bash",
+            "npm_config_script_shell" to "/bin/bash",
+            "npm_config_shell" to "/bin/bash",
+            "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${launchContext.guestRuntimeBin}",
+            "LD_LIBRARY_PATH" to launchContext.guestRuntimeLib,
+            "TERM" to "xterm-256color",
+            "COLORTERM" to "truecolor",
+            "LANG" to "C.UTF-8",
+            "LC_ALL" to "C.UTF-8",
+        )
+        val guestCaCert = File(launchContext.hostRuntimeRoot, "etc/ca-certificates/cacert.pem")
+        if (guestCaCert.exists()) {
+            backendEnv["SSL_CERT_FILE"] = launchContext.guestCaCertPath
+            backendEnv["NODE_EXTRA_CA_CERTS"] = launchContext.guestCaCertPath
+            backendEnv["CURL_CA_BUNDLE"] = launchContext.guestCaCertPath
+        }
+
+        val shellScript = buildShellScript(backendEnv, launchCommand)
+        val builder = ProcessBuilder(listOf(wrapper.absolutePath, "-c", shellScript))
+        builder.directory(filesDir)
+        return builder
+    }
+
+    private fun buildShellScript(environment: Map<String, String>, command: List<String>): String {
+        val script = StringBuilder()
+        environment.forEach { (key, value) ->
+            script.append("export ")
+                .append(key)
+                .append('=')
+                .append(shellQuote(value))
+                .append('\n')
+        }
+        script.append("exec ")
+            .append(command.joinToString(" ") { shellQuote(it) })
+        return script.toString()
+    }
+
+    private fun shellQuote(value: String): String =
+        "'" + value.replace("'", "'\"'\"'") + "'"
 
     private fun streamToLog(streamName: String, inputStream: java.io.InputStream): Thread {
         return Thread({

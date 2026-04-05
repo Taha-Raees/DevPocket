@@ -61,6 +61,26 @@ This project has a comprehensive memory system at `.claude/projects/-home-...-De
 
 ---
 
+## Recent Changes (2026-04-04, late)
+
+### ✅ CHANGED: Theia Backend Now Prefers Debian Runtime
+
+**What changed:**
+- `TheiaBackendService.kt` now prefers launching the Node backend inside Debian through `bin/devpocket-shell`
+- `BootstrapInstallerService.kt` rewrites the Debian wrapper with bind mounts for:
+  - `/opt/devpocket` → bundled runtime
+  - `/opt/devpocket-config` → Theia config dir
+  - `/opt/devpocket-extensions` → extracted extension dir
+- `TheiaRuntimePaths.kt` now exposes Debian guest paths for backend entrypoint, runtime bin/lib, config, extensions, and workspace
+- Terminal/task/plugin-host paths strip host `LD_LIBRARY_PATH` when the backend is already inside Debian so spawned Debian tools do not inherit Android runtime linker settings
+
+**Important runtime truth now:**
+- Preferred mode: backend inside Debian
+- Fallback mode: host backend only when Debian is unavailable or validation fails
+- Shells, tasks, and command-console jobs should now resolve to Debian `/bin/bash` when backend migration is active
+
+---
+
 ## Recent Changes (2026-04-04)
 
 ### ✅ FIXED: Debian Environment Critical Issues

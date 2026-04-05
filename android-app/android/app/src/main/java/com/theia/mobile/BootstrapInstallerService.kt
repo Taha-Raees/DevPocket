@@ -719,8 +719,12 @@ unset LD_PRELOAD
 export DEVPOCKET_DEBIAN_ROOT="${appDataDir}/files/linux/debian"
 export DEVPOCKET_APP_CACHE="${appDataDir}/cache"
 export DEVPOCKET_APP_FILES="${appDataDir}/files"
+export DEVPOCKET_RUNTIME_ROOT="${appDataDir}/files/runtime"
 export DEVPOCKET_RUNTIME_BIN="${appDataDir}/files/runtime/bin"
-export LD_LIBRARY_PATH="${appDataDir}/files/runtime/lib:${'$'}{LD_LIBRARY_PATH:-}"
+export DEVPOCKET_RUNTIME_LIB="${appDataDir}/files/runtime/lib"
+export DEVPOCKET_RUNTIME_ETC="${appDataDir}/files/runtime/etc"
+export DEVPOCKET_THEIA_CONFIG_DIR="${appDataDir}/files/.theia-android-lite"
+export DEVPOCKET_THEIA_EXTENSIONS_DIR="${appDataDir}/files/theia/extensions"
 export DEBIAN_FRONTEND=noninteractive
 export USER="$username"
 export LOGNAME="$username"
@@ -729,7 +733,7 @@ export TERM=xterm-256color
 export COLORTERM=truecolor
 export LC_ALL=C.UTF-8
 export LANG=C.UTF-8
-export PATH="${'$'}{DEVPOCKET_RUNTIME_BIN}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 export DPKG_NO_DEBSPLIT=1
 export PROOT_TMP_DIR="${'$'}{DEVPOCKET_APP_CACHE}/proot-tmp"
 export PROOT_NO_SECCOMP=1
@@ -742,8 +746,6 @@ chmod 1777 "${'$'}PROOT_TMP_DIR" "${'$'}TMPDIR"
 PROOT_BIN="${'$'}{DEVPOCKET_RUNTIME_BIN}/proot"
 FALLBACK_SHELL="/system/bin/sh"
 run_fallback_shell() {
-  export PATH="${'$'}{DEVPOCKET_RUNTIME_BIN}:${'$'}PATH"
-  export LD_LIBRARY_PATH="${'$'}{DEVPOCKET_RUNTIME_BIN}/../lib:${'$'}LD_LIBRARY_PATH"
   export PS1='android@devpocket:\w\\$ '
   if [ "$1" = "-lc" ] && [ -n "$2" ]; then
     shift
@@ -765,6 +767,7 @@ if [ ! -x "${'$'}PROOT_BIN" ]; then
 fi
 
 mkdir -p "${'$'}PROOT_TMP_DIR" "${'$'}{DEVPOCKET_APP_CACHE}/android-tmp"
+mkdir -p "${'$'}{DEVPOCKET_THEIA_CONFIG_DIR}" "${'$'}{DEVPOCKET_THEIA_EXTENSIONS_DIR}"
 
 # === Fake /proc/sys/crypto/fips_enabled for libgcrypt ===
 FIPS_DIR="${'$'}{DEVPOCKET_APP_CACHE}/fakeproc"
@@ -855,6 +858,9 @@ rm -f "${'$'}{DEBIAN_ROOT}/etc/apt/sources.list.d/"* 2>/dev/null
 # proot's mkdirat may not be intercepted on all Android kernel versions.
 # Directories that apt, dpkg, and bash need MUST exist before proot starts.
 mkdir -p "${'$'}{DEBIAN_ROOT}/home/$username" 2>/dev/null || true
+mkdir -p "${'$'}{DEBIAN_ROOT}/opt/devpocket" 2>/dev/null || true
+mkdir -p "${'$'}{DEBIAN_ROOT}/opt/devpocket-config" 2>/dev/null || true
+mkdir -p "${'$'}{DEBIAN_ROOT}/opt/devpocket-extensions" 2>/dev/null || true
 mkdir -p "${'$'}{DEBIAN_ROOT}/tmp" 2>/dev/null || true
 mkdir -p "${'$'}{DEBIAN_ROOT}/run" 2>/dev/null || true
 mkdir -p "${'$'}{DEBIAN_ROOT}/var/tmp" 2>/dev/null || true
@@ -932,6 +938,9 @@ exec "${'$'}PROOT_BIN" \
   -b /system \
   -b /apex \
   -b /sdcard \
+  -b "${'$'}{DEVPOCKET_RUNTIME_ROOT}:/opt/devpocket" \
+  -b "${'$'}{DEVPOCKET_THEIA_CONFIG_DIR}:/opt/devpocket-config" \
+  -b "${'$'}{DEVPOCKET_THEIA_EXTENSIONS_DIR}:/opt/devpocket-extensions" \
   -b "${'$'}{DEVPOCKET_APP_CACHE}/android-tmp:/tmp" \
   -w "${'$'}PROOT_WD" \
     /usr/bin/env -i \
@@ -944,7 +953,7 @@ exec "${'$'}PROOT_BIN" \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
     DEBIAN_FRONTEND=noninteractive \
-    PATH="${'$'}{DEVPOCKET_RUNTIME_BIN}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+    PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
     DPKG_NO_DEBSPLIT=1 \
     LD_PRELOAD="${'$'}PROOT_LD_PRELOAD" \
   /bin/bash ${'$'}_BASH_OPTS "$@"

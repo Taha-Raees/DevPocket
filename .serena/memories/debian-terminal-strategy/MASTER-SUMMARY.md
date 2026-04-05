@@ -110,6 +110,11 @@ This document captures the complete 15-phase plan to transform DevPocket from an
 - Phase 14: Comprehensive testing
 - Phase 15: Rollout and deprecation strategy
 
+**2026-04-04 update:**
+- `TheiaBackendService.kt` now prefers launching the backend inside Debian through `bin/devpocket-shell`
+- `BootstrapInstallerService.kt` bind-mounts the runtime into Debian at `/opt/devpocket` plus dedicated config/extensions mounts
+- TypeScript shell/task/plugin-host code now strips host `LD_LIBRARY_PATH` for Debian-spawned user processes to avoid leaking Android linker settings into Debian tools
+
 ---
 
 ## Key Files Created/Modified

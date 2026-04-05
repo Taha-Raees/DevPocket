@@ -5,6 +5,10 @@ import java.io.File
 
 object TheiaRuntimePaths {
 
+    private const val DEBIAN_RUNTIME_ROOT = "/opt/devpocket"
+    private const val DEBIAN_CONFIG_ROOT = "/opt/devpocket-config"
+    private const val DEBIAN_EXTENSIONS_ROOT = "/opt/devpocket-extensions"
+
     fun runtimeRoot(context: Context): File =
         File(context.filesDir, "runtime")
 
@@ -65,4 +69,42 @@ object TheiaRuntimePaths {
      */
     fun getLegacyExternalWorkspace(): File =
         File("/storage/emulated/0/Documents/DevPocket")
+
+    fun debianGuestRuntimeRoot(): String =
+        DEBIAN_RUNTIME_ROOT
+
+    fun debianGuestNodeBinary(): String =
+        "$DEBIAN_RUNTIME_ROOT/bin/node"
+
+    fun debianGuestBackendEntrypoint(): String =
+        "$DEBIAN_RUNTIME_ROOT/theia-android-lite/lib/backend/main.js"
+
+    fun debianGuestProjectRoot(): String =
+        "$DEBIAN_RUNTIME_ROOT/theia-android-lite"
+
+    fun debianGuestConfigDir(): String =
+        DEBIAN_CONFIG_ROOT
+
+    fun debianGuestExtensionsDir(): String =
+        DEBIAN_EXTENSIONS_ROOT
+
+    fun debianGuestRuntimeBin(): String =
+        "$DEBIAN_RUNTIME_ROOT/bin"
+
+    fun debianGuestRuntimeLib(): String =
+        "$DEBIAN_RUNTIME_ROOT/lib"
+
+    fun debianGuestCaCertPath(): String =
+        "$DEBIAN_RUNTIME_ROOT/etc/ca-certificates/cacert.pem"
+
+    fun debianGuestOvsxRouterConfig(): String =
+        "$DEBIAN_RUNTIME_ROOT/config/ovsx-router-config.json"
+
+    fun debianGuestHome(context: Context): String {
+        val username = OnboardingStateManager(context).getConfig().username ?: "devpocket"
+        return "/home/$username"
+    }
+
+    fun debianGuestWorkspace(context: Context): String =
+        debianGuestHome(context) + "/code"
 }
