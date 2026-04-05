@@ -13,6 +13,7 @@ import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
 import java.nio.charset.StandardCharsets
+import java.nio.file.Files
 import java.security.MessageDigest
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
@@ -33,6 +34,7 @@ class BootstrapInstallerService(private val context: Context) {
         private const val TEXT_PATCH_LIMIT_BYTES = 5L * 1024L * 1024L
         private const val LEGACY_TERMUX_PREFIX = "/data/data/com.termux/files/usr"
         private const val LEGACY_TERMUX_HOME = "/data/data/com.termux/files/home"
+        private const val MAX_DIAGNOSTIC_LINES = 12
 
         private data class BootstrapArchive(
             val arch: String,
@@ -95,6 +97,7 @@ class BootstrapInstallerService(private val context: Context) {
 
     private val stateManager = OnboardingStateManager(context)
     private var progressCallback: ((InstallProgress) -> Unit)? = null
+    private val recentCommandOutput = ArrayDeque<String>()
 
     fun setProgressCallback(callback: (InstallProgress) -> Unit) {
         progressCallback = callback
@@ -103,6 +106,7 @@ class BootstrapInstallerService(private val context: Context) {
     fun install(): Boolean {
         try {
             Log.i(TAG, "Starting embedded Termux + proot-distro installation")
+            recentCommandOutput.clear()
             stateManager.setState(OnboardingStateManager.OnboardingState.ONBOARDING_INSTALLING)
             seedDefaultAccountState()
             ensureBaseDirectories()
@@ -199,6 +203,7 @@ class BootstrapInstallerService(private val context: Context) {
             Log.i(TAG, "Termux bootstrap already present at ${termuxPrefix.absolutePath}")
             patchTextPrefixReferences()
             markExecutables(termuxPrefix)
+            ensureBootstrapSecondStageCompleted()
             return
         }
 
@@ -222,6 +227,35 @@ class BootstrapInstallerService(private val context: Context) {
         patchTextPrefixReferences()
         markExecutables(termuxPrefix)
         writeWrapperScripts()
+        ensureBootstrapSecondStageCompleted()
+    }
+
+    private fun ensureBootstrapSecondStageCompleted() {
+        val secondStageScript = File(
+            termuxPrefix,
+            "etc/termux/termux-bootstrap/second-stage/termux-bootstrap-second-stage.sh"
+        )
+        val secondStageLock = File(
+            termuxPrefix,
+            "etc/termux/termux-bootstrap/second-stage/termux-bootstrap-second-stage.sh.lock"
+        )
+
+        if (!secondStageScript.exists()) {
+            Log.i(TAG, "No explicit Termux second-stage script found; skipping")
+            return
+        }
+        if (secondStageLock.exists() || Files.isSymbolicLink(secondStageLock.toPath())) {
+            Log.i(TAG, "Termux bootstrap second-stage already completed")
+            return
+        }
+
+        publishProgress("bootstrap-configuring", 0, 100)
+        secondStageScript.setExecutable(true, false)
+        runTermuxCommand(
+            listOf(File(termuxBin, "bash").absolutePath, secondStageScript.absolutePath),
+            "bootstrap-configuring"
+        )
+        publishProgress("bootstrap-configuring", 100, 100)
     }
 
     private fun downloadFile(url: String, outputFile: File) {
@@ -439,9 +473,9 @@ class BootstrapInstallerService(private val context: Context) {
             return
         }
 
-        publishProgress("termux-upgrading", 0, 100)
-        runTermuxShellCommand("pkg update -y && pkg upgrade -y", "termux-upgrading")
-        publishProgress("termux-upgrading", 100, 100)
+        publishProgress("termux-updating", 0, 100)
+        runTermuxShellCommand("pkg update -y", "termux-updating")
+        publishProgress("termux-updating", 100, 100)
 
         publishProgress("termux-installing-packages", 0, 100)
         runTermuxShellCommand("pkg install -y $TERMUX_PACKAGES", "termux-installing-packages")
@@ -605,18 +639,36 @@ class BootstrapInstallerService(private val context: Context) {
         builder.redirectErrorStream(true)
 
         val process = builder.start()
+        rememberCommandOutput("[$phase] $ ${command.joinToString(" ")}")
         BufferedReader(InputStreamReader(process.inputStream, StandardCharsets.UTF_8)).use { reader ->
             var line: String?
             while (reader.readLine().also { line = it } != null) {
                 Log.i(TAG, "[$phase] $line")
+                rememberCommandOutput("[$phase] $line")
             }
         }
 
         val exitCode = process.waitFor()
         Log.i(TAG, "$phase command exited with code $exitCode")
         if (exitCode != 0) {
-            throw IllegalStateException("$phase command failed with exit code $exitCode")
+            throw IllegalStateException(
+                "$phase command failed with exit code $exitCode\n" + recentDiagnosticsSummary()
+            )
         }
+    }
+
+    private fun rememberCommandOutput(line: String) {
+        if (recentCommandOutput.size >= MAX_DIAGNOSTIC_LINES) {
+            recentCommandOutput.removeFirst()
+        }
+        recentCommandOutput.addLast(line)
+    }
+
+    private fun recentDiagnosticsSummary(): String {
+        if (recentCommandOutput.isEmpty()) {
+            return "No installer output was captured."
+        }
+        return recentCommandOutput.joinToString(separator = "\n")
     }
 
     private fun calculateSHA256(file: File): String {

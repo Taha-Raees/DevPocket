@@ -147,9 +147,10 @@ class OnboardingActivity : AppCompatActivity() {
         val mappedProgress = when (progress.phase) {
             "bootstrap-downloading" -> 5 + (progress.percentComplete * 20 / 100)
             "bootstrap-verifying" -> 26 + (progress.percentComplete * 4 / 100)
-            "bootstrap-extracting" -> 30 + (progress.percentComplete * 15 / 100)
-            "termux-upgrading" -> 45 + (progress.percentComplete * 10 / 100)
-            "termux-installing-packages" -> 55 + (progress.percentComplete * 18 / 100)
+            "bootstrap-extracting" -> 30 + (progress.percentComplete * 12 / 100)
+            "bootstrap-configuring" -> 42 + (progress.percentComplete * 8 / 100)
+            "termux-updating" -> 50 + (progress.percentComplete * 8 / 100)
+            "termux-installing-packages" -> 58 + (progress.percentComplete * 15 / 100)
             "debian-installing" -> 73 + (progress.percentComplete * 17 / 100)
             else -> progress.percentComplete.coerceIn(5, 85)
         }.coerceIn(5, 85)
@@ -158,7 +159,8 @@ class OnboardingActivity : AppCompatActivity() {
             "bootstrap-downloading" -> "Downloading Termux runtime"
             "bootstrap-verifying" -> "Verifying Termux runtime"
             "bootstrap-extracting" -> "Extracting Termux runtime"
-            "termux-upgrading" -> "Upgrading Termux packages"
+            "bootstrap-configuring" -> "Configuring Termux runtime"
+            "termux-updating" -> "Updating Termux package metadata"
             "termux-installing-packages" -> "Installing nodejs, proot, and proot-distro"
             "debian-installing" -> "Installing Debian with proot-distro"
             else -> "Preparing DevPocket"
@@ -167,7 +169,8 @@ class OnboardingActivity : AppCompatActivity() {
             "bootstrap-downloading" -> "Fetching official Termux bootstrap (${progress.percentComplete}%)"
             "bootstrap-verifying" -> "Checking bootstrap integrity"
             "bootstrap-extracting" -> "Preparing the embedded Termux prefix (${progress.percentComplete}%)"
-            "termux-upgrading" -> "Running pkg update and pkg upgrade"
+            "bootstrap-configuring" -> "Running Termux bootstrap second-stage setup"
+            "termux-updating" -> "Running pkg update"
             "termux-installing-packages" -> "Installing the host runtime packages used by DevPocket"
             "debian-installing" -> "Downloading and provisioning Debian inside proot-distro"
             else -> "Installing runtime components"

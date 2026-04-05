@@ -123,6 +123,7 @@ This document captures the complete 15-phase plan to transform DevPocket from an
 - Debian homes now include shortcuts to Android shared storage (`~/storage`, `~/Download`, `~/Documents`, `~/Pictures`)
 - Runtime now downloads the official Termux bootstrap into `files/usr`, patches text scripts to the app prefix, installs `proot`, `proot-distro`, and `nodejs`, and provisions Debian with official `proot-distro`
 - `devpocket-shell` now lives in the Termux prefix and wraps `proot-distro login debian` with only the app-specific binds needed by the IDE
+- Installer now runs the Termux bootstrap second-stage explicitly and avoids `pkg upgrade` during first-run onboarding to reduce bootstrap failures
 
 ---
 

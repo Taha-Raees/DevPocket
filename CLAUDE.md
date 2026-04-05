@@ -66,7 +66,7 @@ This project has a comprehensive memory system at `.claude/projects/-home-...-De
 ### ✅ CHANGED: Embedded Termux + Official proot-distro Flow
 
 **Runtime model now:**
-- `BootstrapInstallerService.kt` now downloads the official Termux bootstrap, extracts it into `files/usr`, patches text scripts to the app prefix, runs `pkg update && pkg upgrade`, installs `proot proot-distro nodejs`, and then installs Debian with official `proot-distro`
+- `BootstrapInstallerService.kt` now downloads the official Termux bootstrap, extracts it into `files/usr`, patches text scripts to the app prefix, runs Termux bootstrap second-stage, updates package metadata, installs `proot proot-distro nodejs`, and then installs Debian with official `proot-distro`
 - `TheiaBackendService.kt` now runs the backend with Node.js from the embedded Termux prefix
 - Debian is used for terminal sessions through `devpocket-shell`, which now delegates to `proot-distro login debian`
 - Backend startup no longer passes a default workspace argument, so the IDE does not auto-open `/root` or `/home/<user>/code`
@@ -85,6 +85,11 @@ This project has a comprehensive memory system at `.claude/projects/-home-...-De
 **Important architecture note:**
 - The app no longer manages a custom Debian rootfs installer
 - The remaining custom wrapper layer is intentionally thin: one Termux env wrapper and one Debian shell wrapper around official `proot-distro`
+
+**Installer stability note:**
+- First-boot host setup now runs the Termux bootstrap second-stage explicitly after extraction
+- First-boot package setup uses `pkg update` before `pkg install proot proot-distro nodejs`; it no longer runs `pkg upgrade` during onboarding
+- Installer failures now preserve the last captured command output so the loading screen shows the real failing lines instead of only an exit code
 
 ---
 
