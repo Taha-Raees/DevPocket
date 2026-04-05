@@ -30,6 +30,9 @@ object TheiaRuntimePaths {
     fun termuxEnvWrapper(context: Context): File =
         File(termuxBin(context), "devpocket-termux-env")
 
+    fun termuxCompatWrapper(context: Context): File =
+        File(termuxBin(context), "devpocket-termux-compat")
+
     fun termuxShellWrapper(context: Context): File =
         File(termuxBin(context), "devpocket-shell")
 

@@ -210,6 +210,7 @@
 - Runtime now installs an embedded Termux bootstrap under `files/usr`, patches script prefixes to the app sandbox, installs `proot`, `proot-distro`, and `nodejs`, and uses official `proot-distro install debian`
 - The remaining custom shell logic is limited to an env wrapper and a thin `devpocket-shell` launcher around `proot-distro login debian`
 - First-run installer now executes the Termux bootstrap second-stage explicitly and uses `pkg update` without `pkg upgrade` before installing host packages
+- A thin compatibility launcher backed by the bundled runtime `proot` is now required for stock Termux binaries that still hardcode `/data/data/com.termux/files/...`
 
 ---
 

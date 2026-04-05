@@ -70,6 +70,7 @@ This project has a comprehensive memory system at `.claude/projects/-home-...-De
 - `TheiaBackendService.kt` now runs the backend with Node.js from the embedded Termux prefix
 - Debian is used for terminal sessions through `devpocket-shell`, which now delegates to `proot-distro login debian`
 - Backend startup no longer passes a default workspace argument, so the IDE does not auto-open `/root` or `/home/<user>/code`
+- Because upstream Termux binaries still hardcode `com.termux` paths, bootstrap/package-management and Debian login now go through a thin compatibility launcher backed by the prebundled runtime `proot`, binding the app sandbox to `/data/data/com.termux/files`
 
 **Onboarding changes:**
 - `OnboardingActivity.kt` is now a single automatic preparation screen
@@ -90,6 +91,7 @@ This project has a comprehensive memory system at `.claude/projects/-home-...-De
 - First-boot host setup now runs the Termux bootstrap second-stage explicitly after extraction
 - First-boot package setup uses `pkg update` before `pkg install proot proot-distro nodejs`; it no longer runs `pkg upgrade` during onboarding
 - Installer failures now preserve the last captured command output so the loading screen shows the real failing lines instead of only an exit code
+- The compatibility launcher is used only for hardcoded-path Termux commands (`dpkg`, `pkg`, `proot-distro`) so the backend can remain outside Debian while stock bootstrap binaries still work
 
 ---
 

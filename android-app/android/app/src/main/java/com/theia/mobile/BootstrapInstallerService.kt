@@ -92,7 +92,11 @@ class BootstrapInstallerService(private val context: Context) {
     private val termuxBin = TheiaRuntimePaths.termuxBin(context)
     private val termuxLib = TheiaRuntimePaths.termuxLib(context)
     private val termuxEnvWrapper = TheiaRuntimePaths.termuxEnvWrapper(context)
+    private val termuxCompatWrapper = TheiaRuntimePaths.termuxCompatWrapper(context)
     private val termuxShellWrapper = TheiaRuntimePaths.termuxShellWrapper(context)
+    private val runtimeRoot = TheiaRuntimePaths.runtimeRoot(context)
+    private val runtimeProot = File(runtimeRoot, "bin/proot")
+    private val termuxCompatCache = File(context.cacheDir, "termux-compat")
     private val debianRoot = TheiaRuntimePaths.getDebianRoot(context)
 
     private val stateManager = OnboardingStateManager(context)
@@ -109,6 +113,7 @@ class BootstrapInstallerService(private val context: Context) {
             recentCommandOutput.clear()
             stateManager.setState(OnboardingStateManager.OnboardingState.ONBOARDING_INSTALLING)
             seedDefaultAccountState()
+            AssetExtractor.ensureExtracted(context)
             ensureBaseDirectories()
 
             ensureBootstrapInstalled()
@@ -171,6 +176,7 @@ class BootstrapInstallerService(private val context: Context) {
         tempDir.mkdirs()
         termuxHome.mkdirs()
         termuxTmp.mkdirs()
+        termuxCompatCache.mkdirs()
         TheiaRuntimePaths.configDir(context).mkdirs()
         TheiaRuntimePaths.extensionsRoot(context).mkdirs()
     }
@@ -251,7 +257,7 @@ class BootstrapInstallerService(private val context: Context) {
 
         publishProgress("bootstrap-configuring", 0, 100)
         secondStageScript.setExecutable(true, false)
-        runTermuxCommand(
+        runTermuxCompatCommand(
             listOf(File(termuxBin, "bash").absolutePath, secondStageScript.absolutePath),
             "bootstrap-configuring",
             termuxDpkgEnv()
@@ -475,11 +481,11 @@ class BootstrapInstallerService(private val context: Context) {
         }
 
         publishProgress("termux-updating", 0, 100)
-        runTermuxShellCommand("pkg update -y", "termux-updating", termuxDpkgEnv())
+        runTermuxCompatShellCommand("pkg update -y", "termux-updating", termuxDpkgEnv())
         publishProgress("termux-updating", 100, 100)
 
         publishProgress("termux-installing-packages", 0, 100)
-        runTermuxShellCommand("pkg install -y $TERMUX_PACKAGES", "termux-installing-packages", termuxDpkgEnv())
+        runTermuxCompatShellCommand("pkg install -y $TERMUX_PACKAGES", "termux-installing-packages", termuxDpkgEnv())
         publishProgress("termux-installing-packages", 100, 100)
 
         patchTextPrefixReferences()
@@ -493,7 +499,7 @@ class BootstrapInstallerService(private val context: Context) {
         }
 
         publishProgress("debian-installing", 0, 100)
-        runTermuxCommand(listOf(File(termuxBin, "proot-distro").absolutePath, "install", DEBIAN_ALIAS), "debian-installing")
+        runTermuxCompatCommand(listOf(File(termuxBin, "proot-distro").absolutePath, "install", DEBIAN_ALIAS), "debian-installing")
         publishProgress("debian-installing", 100, 100)
     }
 
@@ -595,17 +601,62 @@ class BootstrapInstallerService(private val context: Context) {
         termuxEnvWrapper.writeText(envWrapper)
         termuxEnvWrapper.setExecutable(true, false)
 
+        val compatWrapper = buildString {
+            appendLine("#!/system/bin/sh")
+            appendLine("APP_FILES=\"${context.filesDir.absolutePath}\"")
+            appendLine("APP_CACHE=\"${context.cacheDir.absolutePath}\"")
+            appendLine("LEGACY_FILES=\"/data/data/com.termux/files\"")
+            appendLine("LEGACY_CACHE=\"/data/data/com.termux/cache\"")
+            appendLine("LEGACY_PREFIX=\"/data/data/com.termux/files/usr\"")
+            appendLine("LEGACY_HOME=\"/data/data/com.termux/files/home\"")
+            appendLine("LEGACY_TMP=\"/data/data/com.termux/files/usr/tmp\"")
+            appendLine("PROOT_BIN=\"${runtimeProot.absolutePath}\"")
+            appendLine("export PROOT_TMP_DIR=\"${termuxCompatCache.absolutePath}\"")
+            appendLine("export PROOT_NO_SECCOMP=1")
+            appendLine("if [ ! -x \"${runtimeProot.absolutePath}\" ]; then")
+            appendLine("  echo \"DevPocket error: missing bundled compatibility proot at ${runtimeProot.absolutePath}\" >&2")
+            appendLine("  exit 127")
+            appendLine("fi")
+            appendLine("mkdir -p \"${termuxHome.absolutePath}\" \"${termuxTmp.absolutePath}\" \"${termuxCompatCache.absolutePath}\" 2>/dev/null")
+            appendLine("HOST_PWD=\$(pwd 2>/dev/null || printf '%s' \"${termuxHome.absolutePath}\")")
+            appendLine("GUEST_WD=\"${termuxHome.absolutePath}\"")
+            appendLine("case \"\${HOST_PWD}\" in")
+            appendLine("  \"${context.filesDir.absolutePath}\") GUEST_WD=\"\${LEGACY_FILES}\" ;;")
+            appendLine("  \"${context.filesDir.absolutePath}\"/*) GUEST_WD=\"\${LEGACY_FILES}/\${HOST_PWD#${context.filesDir.absolutePath}/}\" ;;")
+            appendLine("  \"${context.cacheDir.absolutePath}\") GUEST_WD=\"\${LEGACY_CACHE}\" ;;")
+            appendLine("  \"${context.cacheDir.absolutePath}\"/*) GUEST_WD=\"\${LEGACY_CACHE}/\${HOST_PWD#${context.cacheDir.absolutePath}/}\" ;;")
+            appendLine("  /sdcard|/sdcard/*|/storage|/storage/*) GUEST_WD=\"\${HOST_PWD}\" ;;")
+            appendLine("  *) GUEST_WD=\"\${LEGACY_HOME}\" ;;")
+            appendLine("esac")
+            appendLine("TERMUX_UID=\$(id -u 2>/dev/null || true)")
+            appendLine("echo \"DevPocket: host Termux compatibility mode (guest-pwd=\${GUEST_WD})\" >&2")
+            appendLine("exec \"\${PROOT_BIN}\" --kill-on-exit --link2symlink -0 -r / \\")
+            appendLine("  -b /system -b /apex -b /dev -b /proc -b /sys -b /sdcard -b /storage \\")
+            appendLine("  -b \"${context.filesDir.absolutePath}:\${LEGACY_FILES}\" \\")
+            appendLine("  -b \"${context.cacheDir.absolutePath}:\${LEGACY_CACHE}\" \\")
+            appendLine("  -w \"\${GUEST_WD}\" \\")
+            appendLine("  /usr/bin/env -i \\")
+            appendLine("    PREFIX=\"\${LEGACY_PREFIX}\" HOME=\"\${LEGACY_HOME}\" TMPDIR=\"\${LEGACY_TMP}\" \\")
+            appendLine("    PATH=\"\${LEGACY_PREFIX}/bin:/system/bin\" LD_LIBRARY_PATH=\"\${LEGACY_PREFIX}/lib\" \\")
+            appendLine("    LANG=C.UTF-8 LC_ALL=C.UTF-8 TERM=xterm-256color COLORTERM=truecolor ANDROID_STORAGE=/sdcard \\")
+            appendLine("    TERMUX__UID=\"\${TERMUX_UID}\" TERMUX__USER_ID=\"\${TERMUX_UID}\" \\")
+            appendLine("    \"\$@\"")
+        }
+        termuxCompatWrapper.writeText(compatWrapper)
+        termuxCompatWrapper.setExecutable(true, false)
+
         val shellWrapper = buildString {
             appendLine("#!/system/bin/sh")
             appendLine("APP_FILES=\"${context.filesDir.absolutePath}\"")
             appendLine("PREFIX=\"${termuxPrefix.absolutePath}\"")
             appendLine("TERMUX_ENV=\"${termuxEnvWrapper.absolutePath}\"")
+            appendLine("TERMUX_COMPAT=\"${termuxCompatWrapper.absolutePath}\"")
             appendLine("DEBIAN_ROOT=\"${debianRoot.absolutePath}\"")
             appendLine("RUNTIME_ROOT=\"${TheiaRuntimePaths.runtimeRoot(context).absolutePath}\"")
             appendLine("CONFIG_DIR=\"${TheiaRuntimePaths.configDir(context).absolutePath}\"")
             appendLine("EXTENSIONS_DIR=\"${TheiaRuntimePaths.extensionsRoot(context).absolutePath}\"")
-            appendLine("if [ ! -x \"${termuxEnvWrapper.absolutePath}\" ]; then")
-            appendLine("  echo \"DevPocket error: missing Termux env wrapper at ${termuxEnvWrapper.absolutePath}\" >&2")
+            appendLine("if [ ! -x \"${termuxCompatWrapper.absolutePath}\" ]; then")
+            appendLine("  echo \"DevPocket error: missing Termux compatibility wrapper at ${termuxCompatWrapper.absolutePath}\" >&2")
             appendLine("  exit 127")
             appendLine("fi")
             appendLine("if [ ! -x \"${termuxBin.absolutePath}/proot-distro\" ]; then")
@@ -627,7 +678,7 @@ class BootstrapInstallerService(private val context: Context) {
             appendLine("  set -- --login")
             appendLine("fi")
             appendLine("echo \"DevPocket: entering Debian via proot-distro (host-pwd=\${HOST_PWD} guest-pwd=\${GUEST_WD})\" >&2")
-            appendLine("exec \"${termuxEnvWrapper.absolutePath}\" \"${termuxBin.absolutePath}/proot-distro\" login --shared-tmp \\")
+            appendLine("exec \"${termuxCompatWrapper.absolutePath}\" \"${termuxBin.absolutePath}/proot-distro\" login --shared-tmp \\")
             appendLine("  --bind /sdcard:/sdcard \\")
             appendLine("  --bind /storage:/storage \\")
             appendLine("  --bind \"\${RUNTIME_ROOT}:/opt/devpocket\" \\")
@@ -640,7 +691,7 @@ class BootstrapInstallerService(private val context: Context) {
         }
         termuxShellWrapper.writeText(shellWrapper)
         termuxShellWrapper.setExecutable(true, false)
-        Log.i(TAG, "Wrote Termux wrappers at ${termuxEnvWrapper.absolutePath} and ${termuxShellWrapper.absolutePath}")
+        Log.i(TAG, "Wrote Termux wrappers at ${termuxEnvWrapper.absolutePath}, ${termuxCompatWrapper.absolutePath}, and ${termuxShellWrapper.absolutePath}")
     }
 
     private fun termuxDpkgEnv(): Map<String, String> = mapOf(
@@ -648,6 +699,22 @@ class BootstrapInstallerService(private val context: Context) {
         "DPKG_ADMINDIR" to File(termuxPrefix, "var/lib/dpkg").absolutePath,
         "DPKG_FORCE" to "script-chrootless"
     )
+
+    private fun runTermuxCompatShellCommand(
+        command: String,
+        phase: String,
+        extraEnv: Map<String, String> = emptyMap()
+    ) {
+        runTermuxCompatCommand(listOf(File(termuxBin, "bash").absolutePath, "-lc", command), phase, extraEnv)
+    }
+
+    private fun runTermuxCompatCommand(
+        command: List<String>,
+        phase: String,
+        extraEnv: Map<String, String> = emptyMap()
+    ) {
+        runTermuxCommand(command, phase, extraEnv, termuxCompatWrapper)
+    }
 
     private fun runTermuxShellCommand(
         command: String,
@@ -660,11 +727,12 @@ class BootstrapInstallerService(private val context: Context) {
     private fun runTermuxCommand(
         command: List<String>,
         phase: String,
-        extraEnv: Map<String, String> = emptyMap()
+        extraEnv: Map<String, String> = emptyMap(),
+        launcher: File = termuxEnvWrapper
     ) {
         Log.i(TAG, "Running $phase command: ${command.joinToString(" ")}")
 
-        val builder = ProcessBuilder(listOf(termuxEnvWrapper.absolutePath) + command)
+        val builder = ProcessBuilder(listOf(launcher.absolutePath) + command)
         builder.directory(termuxHome)
         builder.redirectErrorStream(true)
         builder.environment().putAll(extraEnv)
