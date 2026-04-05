@@ -253,7 +253,8 @@ class BootstrapInstallerService(private val context: Context) {
         secondStageScript.setExecutable(true, false)
         runTermuxCommand(
             listOf(File(termuxBin, "bash").absolutePath, secondStageScript.absolutePath),
-            "bootstrap-configuring"
+            "bootstrap-configuring",
+            termuxDpkgEnv()
         )
         publishProgress("bootstrap-configuring", 100, 100)
     }
@@ -474,11 +475,11 @@ class BootstrapInstallerService(private val context: Context) {
         }
 
         publishProgress("termux-updating", 0, 100)
-        runTermuxShellCommand("pkg update -y", "termux-updating")
+        runTermuxShellCommand("pkg update -y", "termux-updating", termuxDpkgEnv())
         publishProgress("termux-updating", 100, 100)
 
         publishProgress("termux-installing-packages", 0, 100)
-        runTermuxShellCommand("pkg install -y $TERMUX_PACKAGES", "termux-installing-packages")
+        runTermuxShellCommand("pkg install -y $TERMUX_PACKAGES", "termux-installing-packages", termuxDpkgEnv())
         publishProgress("termux-installing-packages", 100, 100)
 
         patchTextPrefixReferences()
@@ -562,6 +563,11 @@ class BootstrapInstallerService(private val context: Context) {
             appendLine("export PREFIX=\"${termuxPrefix.absolutePath}\"")
             appendLine("export HOME=\"${termuxHome.absolutePath}\"")
             appendLine("export TMPDIR=\"${termuxTmp.absolutePath}\"")
+            appendLine("TERMUX_UID=${'$'}(id -u 2>/dev/null || true)")
+            appendLine("if [ -n \"${'$'}TERMUX_UID\" ]; then")
+            appendLine("  export TERMUX__UID=\"${'$'}TERMUX_UID\"")
+            appendLine("  export TERMUX__USER_ID=\"${'$'}TERMUX_UID\"")
+            appendLine("fi")
             appendLine("if [ -n \"${'$'}ORIG_PATH\" ]; then")
             appendLine("  export PATH=\"${termuxBin.absolutePath}:/system/bin:${'$'}ORIG_PATH\"")
             appendLine("else")
@@ -637,16 +643,31 @@ class BootstrapInstallerService(private val context: Context) {
         Log.i(TAG, "Wrote Termux wrappers at ${termuxEnvWrapper.absolutePath} and ${termuxShellWrapper.absolutePath}")
     }
 
-    private fun runTermuxShellCommand(command: String, phase: String) {
-        runTermuxCommand(listOf(File(termuxBin, "bash").absolutePath, "-lc", command), phase)
+    private fun termuxDpkgEnv(): Map<String, String> = mapOf(
+        "DPKG_ROOT" to termuxPrefix.absolutePath,
+        "DPKG_ADMINDIR" to File(termuxPrefix, "var/lib/dpkg").absolutePath,
+        "DPKG_FORCE" to "script-chrootless"
+    )
+
+    private fun runTermuxShellCommand(
+        command: String,
+        phase: String,
+        extraEnv: Map<String, String> = emptyMap()
+    ) {
+        runTermuxCommand(listOf(File(termuxBin, "bash").absolutePath, "-lc", command), phase, extraEnv)
     }
 
-    private fun runTermuxCommand(command: List<String>, phase: String) {
+    private fun runTermuxCommand(
+        command: List<String>,
+        phase: String,
+        extraEnv: Map<String, String> = emptyMap()
+    ) {
         Log.i(TAG, "Running $phase command: ${command.joinToString(" ")}")
 
         val builder = ProcessBuilder(listOf(termuxEnvWrapper.absolutePath) + command)
         builder.directory(termuxHome)
         builder.redirectErrorStream(true)
+        builder.environment().putAll(extraEnv)
 
         val process = builder.start()
         rememberCommandOutput("[$phase] $ ${command.joinToString(" ")}")
