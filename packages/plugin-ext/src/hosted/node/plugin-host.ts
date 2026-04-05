@@ -53,8 +53,6 @@ function sanitizeCommandPath(command: string): string {
     return command;
 }
 
-const runtimeBin = process.env.THEIA_ANDROID_RUNTIME_BIN;
-
 const originalUserInfo = os.userInfo.bind(os);
 (os as typeof os & { userInfo: typeof os.userInfo }).userInfo = ((options?: { encoding?: string }) => {
     const info = originalUserInfo(options as never);
@@ -94,7 +92,7 @@ if (!process.env.npm_config_script_shell) {
 const originalSpawn = cp.spawn;
 const originalSpawnSync = cp.spawnSync;
 
-function patchSpawnOptions(_command: string, options: cp.SpawnOptions = {}): cp.SpawnOptions {
+function patchSpawnOptions(options: cp.SpawnOptions = {}): cp.SpawnOptions {
     const resolved = options;
     if (typeof resolved.shell === 'string') {
         resolved.shell = sanitizeShellPath(resolved.shell);
@@ -133,7 +131,7 @@ function patchSpawnOptions(_command: string, options: cp.SpawnOptions = {}): cp.
     return resolved;
 }
 
-function patchSpawnSyncOptions(_command: string, options: cp.SpawnSyncOptions = {}): cp.SpawnSyncOptions {
+function patchSpawnSyncOptions(options: cp.SpawnSyncOptions = {}): cp.SpawnSyncOptions {
     const resolved = options;
     if (typeof resolved.shell === 'string') {
         resolved.shell = sanitizeShellPath(resolved.shell);
@@ -179,9 +177,9 @@ function patchSpawnSyncOptions(_command: string, options: cp.SpawnSyncOptions = 
 ) => {
     const safeCommand = sanitizeCommandPath(command);
     if (Array.isArray(argsOrOptions)) {
-        return originalSpawn(safeCommand, argsOrOptions as string[], patchSpawnOptions(safeCommand, maybeOptions));
+        return originalSpawn(safeCommand, argsOrOptions as string[], patchSpawnOptions(maybeOptions));
     }
-    return originalSpawn(safeCommand, [], patchSpawnOptions(safeCommand, argsOrOptions as cp.SpawnOptions));
+    return originalSpawn(safeCommand, [], patchSpawnOptions(argsOrOptions as cp.SpawnOptions));
 }) as typeof cp.spawn;
 
 (cp as { spawnSync: typeof cp.spawnSync }).spawnSync = ((
