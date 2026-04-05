@@ -39,8 +39,8 @@ class DevPocketTestSuite {
 
     @Test
     fun usernameValidation_rejectsReservedNamesViaErrorMessage() {
-        assertEquals("Username is reserved", UserAccountConfig.getUsernameErrorMessage("root"))
         assertEquals("Username is reserved", UserAccountConfig.getUsernameErrorMessage("debian"))
+        assertEquals(null, UserAccountConfig.getUsernameErrorMessage("root"))
     }
 
     @Test
@@ -56,11 +56,11 @@ class DevPocketTestSuite {
 
     @Test
     fun workspaceDefaultsToAppPrivateStorage() {
-        onboardingStateManager.setUsername("devpocket")
+        onboardingStateManager.setUsername("root")
 
         val workspace = TheiaRuntimePaths.getIdeWorkspace(context)
         assertTrue(workspace.absolutePath.startsWith(context.filesDir.absolutePath))
-        assertTrue(workspace.absolutePath.contains("linux/debian/home/devpocket/code"))
+        assertTrue(workspace.absolutePath.contains("usr/var/lib/proot-distro/installed-rootfs/debian/root"))
     }
 
     @Test

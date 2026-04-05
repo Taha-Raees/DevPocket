@@ -7,17 +7,18 @@ function patchOptions(options) {
     if (!options) {
         options = {};
     }
+    const shell = process.env.THEIA_SHELL || process.env.SHELL || (process.env.DEVPOCKET_TERMUX_PREFIX ? `${process.env.DEVPOCKET_TERMUX_PREFIX}/bin/devpocket-shell` : '/missing/devpocket-shell');
     if (options.shell === true) {
-        options.shell = process.env.SHELL || '/system/bin/sh';
+        options.shell = shell;
     }
     if (!options.env) {
         options.env = Object.assign({}, process.env);
     }
     if (!options.env.SHELL) {
-        options.env.SHELL = process.env.SHELL || '/system/bin/sh';
+        options.env.SHELL = shell;
     }
     if (!options.env.THEIA_SHELL) {
-        options.env.THEIA_SHELL = process.env.SHELL || '/system/bin/sh';
+        options.env.THEIA_SHELL = shell;
     }
     return options;
 }
@@ -45,7 +46,7 @@ os.userInfo = function(options) {
     const info = originalUserInfo.call(this, options);
     try {
         if (info && info.shell && info.shell.includes('com.termux')) {
-            info.shell = process.env.SHELL || '/system/bin/sh';
+            info.shell = process.env.THEIA_SHELL || process.env.SHELL || '/missing/devpocket-shell';
         }
         if (info && info.homedir && info.homedir.includes('com.termux')) {
             info.homedir = process.env.HOME || os.homedir();

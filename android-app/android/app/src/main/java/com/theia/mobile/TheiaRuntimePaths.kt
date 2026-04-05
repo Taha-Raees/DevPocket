@@ -12,6 +12,27 @@ object TheiaRuntimePaths {
     fun runtimeRoot(context: Context): File =
         File(context.filesDir, "runtime")
 
+    fun termuxPrefix(context: Context): File =
+        File(context.filesDir, "usr")
+
+    fun termuxHome(context: Context): File =
+        File(context.filesDir, "home")
+
+    fun termuxTmp(context: Context): File =
+        File(termuxPrefix(context), "tmp")
+
+    fun termuxBin(context: Context): File =
+        File(termuxPrefix(context), "bin")
+
+    fun termuxLib(context: Context): File =
+        File(termuxPrefix(context), "lib")
+
+    fun termuxEnvWrapper(context: Context): File =
+        File(termuxBin(context), "devpocket-termux-env")
+
+    fun termuxShellWrapper(context: Context): File =
+        File(termuxBin(context), "devpocket-shell")
+
     fun logsRoot(context: Context): File =
         File(context.filesDir, "logs")
 
@@ -25,7 +46,7 @@ object TheiaRuntimePaths {
         File(runtimeRoot(context), "theia-android-lite/lib/backend/main.js")
 
     fun nodeBinary(context: Context): File =
-        File(runtimeRoot(context), "bin/node")
+        File(termuxBin(context), "node")
 
     fun configDir(context: Context): File =
         File(context.filesDir, ".theia-android-lite")
@@ -37,30 +58,25 @@ object TheiaRuntimePaths {
      * Get Debian rootfs root directory
      */
     fun getDebianRoot(context: Context): File =
-        File(context.filesDir, "linux/debian")
+        File(termuxPrefix(context), "var/lib/proot-distro/installed-rootfs/debian")
 
     /**
-     * Resolve IDE workspace location with priority:
-     * 1. App-private Debian home workspace (primary): $filesDir/linux/debian/home/<username>/code/
-     * 2. Internal fallback: $filesDir/workspaces/primary/
-     * 3. Legacy external (only if explicitly migrated): /storage/emulated/0/Documents/DevPocket/
+     * Resolve the default Debian home path on the host filesystem.
      *
-     * This ensures new users default to app-private, with fallback to internal storage,
-     * avoiding external shared storage as default.
+     * The backend uses this for HOME and terminal hand-off, but it is no longer passed as the
+     * startup workspace argument to Theia. That keeps the IDE from auto-opening `/home/<user>/code`
+     * on every launch while still giving Debian sessions a stable home directory.
      */
     fun getIdeWorkspace(context: Context): File {
         val onboardingManager = OnboardingStateManager(context)
         val config = onboardingManager.getConfig()
-        
-        // Primary: Debian home workspace if onboarding complete with username
-        if (config.username != null && config.username!!.isNotEmpty()) {
-            val debianHome = File(context.filesDir, "linux/debian/home/${config.username}/code")
-            // Return this path even if not yet created (will be created during install)
-            return debianHome
+
+        val username = config.username?.takeIf { it.isNotBlank() } ?: "root"
+        return if (username == "root") {
+            File(getDebianRoot(context), "root")
+        } else {
+            File(getDebianRoot(context), "home/$username")
         }
-        
-        // Fallback: Internal app-private workspace
-        return File(context.filesDir, "workspaces/primary")
     }
     
     /**
@@ -101,10 +117,10 @@ object TheiaRuntimePaths {
         "$DEBIAN_RUNTIME_ROOT/config/ovsx-router-config.json"
 
     fun debianGuestHome(context: Context): String {
-        val username = OnboardingStateManager(context).getConfig().username ?: "devpocket"
-        return "/home/$username"
+        val username = OnboardingStateManager(context).getConfig().username ?: "root"
+        return if (username == "root") "/root" else "/home/$username"
     }
 
     fun debianGuestWorkspace(context: Context): String =
-        debianGuestHome(context) + "/code"
+        debianGuestHome(context)
 }

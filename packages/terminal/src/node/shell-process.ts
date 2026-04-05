@@ -63,12 +63,26 @@ export class ShellProcess extends TerminalProcess {
     ) {
         const env = { 'COLORTERM': 'truecolor' };
         const cwd = (() => {
+            const path = require('path') as typeof import('path');
+            const fs = require('fs') as typeof import('fs');
+            const requestedRoot = getRootPath(options.rootURI);
+            if (requestedRoot && fs.existsSync(requestedRoot)) {
+                return requestedRoot;
+            }
+
+            const debianWorkspace = process.env.DEVPOCKET_WORKSPACE;
+            if (debianWorkspace && fs.existsSync(debianWorkspace)) {
+                return debianWorkspace;
+            }
+
             const debianRoot = process.env.DEVPOCKET_DEBIAN_ROOT;
             const debianUser = process.env.DEVPOCKET_USER;
             if (debianRoot && debianUser) {
-                const path = require('path') as typeof import('path');
-                const fs = require('fs') as typeof import('fs');
                 const debianHome = path.join(debianRoot, 'home', debianUser);
+                const rootHome = path.join(debianRoot, 'root');
+                if (debianUser === 'root' && fs.existsSync(rootHome)) {
+                    return rootHome;
+                }
                 if (fs.existsSync(debianHome)) {
                     return debianHome;
                 }
@@ -76,7 +90,7 @@ export class ShellProcess extends TerminalProcess {
                     return debianRoot;
                 }
             }
-            return getRootPath(options.rootURI);
+            return requestedRoot;
         })();
         super(<TerminalProcessOptions>{
             command: options.shell || ShellProcess.getShellExecutablePath(),
@@ -100,16 +114,11 @@ export class ShellProcess extends TerminalProcess {
 
         if (process.env.DEVPOCKET_DEBIAN_ROOT) {
             const path = require('path');
-            const debianBin = path.join(process.env.DEVPOCKET_DEBIAN_ROOT, 'bin', 'devpocket-shell');
-            try {
-                const fs = require('fs');
-                const stats = fs.statSync(debianBin);
-                if (stats.isFile() && (stats.mode & 0o100)) {
-                    return debianBin;
-                }
-            } catch (e) {
-                // Fallback if wrapper not found
+            const termuxPrefix = process.env.DEVPOCKET_TERMUX_PREFIX;
+            if (termuxPrefix) {
+                return path.join(termuxPrefix, 'bin', 'devpocket-shell');
             }
+            return process.env.THEIA_SHELL || '/missing/devpocket-shell';
         }
 
         if (isWindows) {

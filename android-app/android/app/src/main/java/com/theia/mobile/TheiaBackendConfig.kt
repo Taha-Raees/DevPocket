@@ -2,8 +2,8 @@
  * Phase 8: Theia Backend Integration
  * Manages backend lifecycle and Debian-aware configuration.
  *
- * Backend runs in the embedded Termux-like host runtime.
- * Terminal sessions always route through Debian via devpocket-shell.
+ * Backend runs in the embedded Termux host runtime installed into the app sandbox.
+ * Terminal sessions always route through Debian via official proot-distro login.
  */
 
 package com.theia.mobile
@@ -29,15 +29,16 @@ object TheiaBackendConfig {
         if (stateManager.isOnboardingComplete()) {
             val config = stateManager.getConfig()
             val debianRoot = getDebianRoot(context).absolutePath
-            val wrapperPath = File(debianRoot, "bin/devpocket-shell").absolutePath
+            val wrapperPath = TheiaRuntimePaths.termuxShellWrapper(context).absolutePath
             
             env["DEVPOCKET_DEBIAN_ROOT"] = debianRoot
-            env["DEVPOCKET_USER"] = config.username ?: "devpocket"
+            env["DEVPOCKET_USER"] = config.username ?: "root"
             env["DEVPOCKET_WORKSPACE"] = TheiaRuntimePaths.getIdeWorkspace(context).absolutePath
             env["THEIA_SHELL"] = wrapperPath
+            env["DEVPOCKET_TERMUX_PREFIX"] = TheiaRuntimePaths.termuxPrefix(context).absolutePath
             
             env["DEVPOCKET_ROOTFS_VERSION"] = config.rootfsVersion ?: ""
-            env["DEVPOCKET_BOOTSTRAP_VERSION"] = "1.0.0"
+            env["DEVPOCKET_BOOTSTRAP_VERSION"] = "2.0.0-termux"
         }
         
         env["TERM"] = "xterm-256color"
@@ -48,33 +49,46 @@ object TheiaBackendConfig {
     }
     
     fun getDebianRoot(context: Context): File = 
-        File(context.filesDir, "linux/debian")
+        TheiaRuntimePaths.getDebianRoot(context)
     
     fun validateDebianSetup(context: Context): Boolean {
         val stateManager = OnboardingStateManager(context)
         
         if (!stateManager.isOnboardingComplete()) {
-            Log.w(TAG, "Debian not installed - terminal will use host shell only")
+            Log.w(TAG, "Debian not installed yet - shell wrapper is not ready")
             return true
         }
         
         val debianRoot = getDebianRoot(context)
-        val userHome = File(debianRoot, "home/${stateManager.getConfig().username}")
+        val username = stateManager.getConfig().username ?: "root"
+        val userHome = if (username == "root") File(debianRoot, "root") else File(debianRoot, "home/$username")
         
         if (!userHome.exists()) {
             Log.e(TAG, "Debian user home not found: ${userHome.absolutePath}")
             return false
         }
         
-        val wrapper = File(debianRoot, "bin/devpocket-shell")
+        val wrapper = TheiaRuntimePaths.termuxShellWrapper(context)
         if (!wrapper.exists()) {
             Log.e(TAG, "Shell wrapper not found: ${wrapper.absolutePath}")
             return false
         }
 
-        val prootBinary = File(context.filesDir, "runtime/bin/proot")
-        if (!prootBinary.exists() || !prootBinary.canExecute()) {
-            Log.e(TAG, "PRoot runtime missing or not executable: ${prootBinary.absolutePath}")
+        val prootBinary = File(TheiaRuntimePaths.termuxBin(context), "proot")
+        if (!prootBinary.exists()) {
+            Log.e(TAG, "Termux proot package missing: ${prootBinary.absolutePath}")
+            return false
+        }
+
+        val prootDistroBinary = File(TheiaRuntimePaths.termuxBin(context), "proot-distro")
+        if (!prootDistroBinary.exists()) {
+            Log.e(TAG, "proot-distro missing: ${prootDistroBinary.absolutePath}")
+            return false
+        }
+
+        val nodeBinary = TheiaRuntimePaths.nodeBinary(context)
+        if (!nodeBinary.exists()) {
+            Log.e(TAG, "Node.js missing from embedded Termux prefix: ${nodeBinary.absolutePath}")
             return false
         }
         
@@ -93,9 +107,10 @@ object TheiaBackendConfig {
         val result = HealthCheckResult()
         
         val startTime = System.currentTimeMillis()
+        val backendPort = TheiaBackendService.activePort.takeIf { it > 0 } ?: BACKEND_PORT
         
         try {
-            val url = URL("http://$BACKEND_HOST:$BACKEND_PORT/")
+            val url = URL("http://$BACKEND_HOST:$backendPort/")
             val conn = url.openConnection() as HttpURLConnection
             conn.connectTimeout = 5000
             conn.connect()
@@ -111,8 +126,9 @@ object TheiaBackendConfig {
         val stateManager = OnboardingStateManager(context)
         if (stateManager.isOnboardingComplete()) {
             val debianRoot = getDebianRoot(context)
-            result.debianHealthy = debianRoot.exists() && 
-                                   File(debianRoot, "home/${stateManager.getConfig().username}").exists()
+            val username = stateManager.getConfig().username ?: "root"
+            val home = if (username == "root") File(debianRoot, "root") else File(debianRoot, "home/$username")
+            result.debianHealthy = debianRoot.exists() && home.exists()
         }
         
         result.responseTimeMs = System.currentTimeMillis() - startTime

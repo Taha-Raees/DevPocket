@@ -174,6 +174,10 @@ export class TheiaCommandConsoleServer implements CommandConsoleServer {
         if (cwd && await fs.pathExists(cwd)) {
             return cwd;
         }
+        const debianWorkspace = process.env.DEVPOCKET_WORKSPACE;
+        if (debianWorkspace && await fs.pathExists(debianWorkspace)) {
+            return debianWorkspace;
+        }
         const directories = await this.listWorkspaceDirectories();
         return directories[0];
     }
@@ -193,7 +197,9 @@ export class TheiaCommandConsoleServer implements CommandConsoleServer {
     }
 
     protected async resolveShell(): Promise<string> {
-        const shellCandidates = process.platform === 'android'
+        const shellCandidates = process.env.DEVPOCKET_DEBIAN_ROOT
+            ? [process.env.THEIA_SHELL, process.env.SHELL]
+            : process.platform === 'android'
             ? [process.env.THEIA_SHELL, process.env.SHELL, '/system/bin/sh', '/bin/sh']
             : [process.env.THEIA_SHELL, process.env.SHELL, '/bin/bash', '/bin/sh'];
 
@@ -215,6 +221,19 @@ export class TheiaCommandConsoleServer implements CommandConsoleServer {
                 });
                 return candidate;
             }
+        }
+
+        if (process.env.DEVPOCKET_DEBIAN_ROOT) {
+            const fallback = process.env.THEIA_SHELL || process.env.SHELL || '/missing/devpocket-shell';
+            console.info('[theia-command-console] resolveShell diagnostics', {
+                platform: process.platform,
+                envShell: process.env.SHELL,
+                theiaShell: process.env.THEIA_SHELL,
+                theiaShellArgs: process.env.THEIA_SHELL_ARGS,
+                selected: fallback,
+                candidates: diagnostics
+            });
+            return fallback;
         }
 
         if (os.platform() === 'win32') {

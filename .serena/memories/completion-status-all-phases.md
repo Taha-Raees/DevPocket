@@ -201,6 +201,15 @@
 - Host runtime remains the fallback path if Debian validation fails
 - Terminal, shell-task, command-console, and plugin-host child process paths now clear host `LD_LIBRARY_PATH` when running Debian user commands
 
+**Architecture Update (2026-04-05):**
+- Backend launch has been moved back to the host runtime for faster startup and simpler health checks
+- Debian remains the terminal environment through `devpocket-shell`
+- First-run UX is being collapsed into one auto-install/progress screen instead of the multi-step account/setup wizard
+- The backend no longer opens `/home/<user>/code` by default on startup
+- Debian home now exposes Android shared storage shortcuts for Downloads/Documents/Pictures
+- Runtime now installs an embedded Termux bootstrap under `files/usr`, patches script prefixes to the app sandbox, installs `proot`, `proot-distro`, and `nodejs`, and uses official `proot-distro install debian`
+- The remaining custom shell logic is limited to an env wrapper and a thin `devpocket-shell` launcher around `proot-distro login debian`
+
 ---
 
 ### ✅ Phase 9: Package Management UX (Complete)

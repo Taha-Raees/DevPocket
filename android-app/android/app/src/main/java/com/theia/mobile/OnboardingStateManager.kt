@@ -8,14 +8,11 @@ import java.time.Instant
  * Manages onboarding flow state and persistence.
  *
  * States:
- * - FIRST_RUN: App launched for first time, no onboarding started
- * - ONBOARDING_WELCOME: User on welcome screen
- * - ONBOARDING_LOGIN: User setting up account (username, etc.)
- * - ONBOARDING_GUIDE: User reviewing setup guide
- * - ONBOARDING_DEBIAN_INSTALL_REQUIRED: About to install Debian rootfs
- * - ONBOARDING_INSTALLING: Debian installation in progress
- * - ONBOARDING_INSTALL_FAILED: Installation failed, show retry/repair
- * - READY_TO_LAUNCH_IDE: Installation complete, ready for IDE
+ * - FIRST_RUN: App launched for the first time
+ * - ONBOARDING_*: Legacy states kept for compatibility; current UX auto-runs embedded Termux bootstrap, package install, Debian install, and backend startup on one screen
+ * - ONBOARDING_INSTALLING: Termux bootstrap, proot-distro Debian installation, and backend startup are in progress
+ * - ONBOARDING_INSTALL_FAILED: Runtime/bootstrap/package install or backend startup failed, show retry
+ * - READY_TO_LAUNCH_IDE: Installation complete, backend can be launched
  * - IDE_RUNNING: User is using the IDE
  */
 class OnboardingStateManager(context: Context) {

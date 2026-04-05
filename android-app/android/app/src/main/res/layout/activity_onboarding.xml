@@ -1,484 +1,83 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#1A1A2E">
+    android:background="#101822">
 
     <LinearLayout
-        android:id="@+id/onboarding_container"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="match_parent"
         android:orientation="vertical"
-        android:padding="32dp"
-        android:gravity="center_horizontal">
+        android:gravity="center"
+        android:padding="32dp">
 
-        <!-- Step 1: Welcome -->
-        <LinearLayout
-            android:id="@+id/step_welcome"
+        <WebView
+            android:id="@+id/onboarding_logo"
+            android:layout_width="196dp"
+            android:layout_height="134dp"
+            android:background="@android:color/transparent"
+            android:layout_marginBottom="24dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Preparing DevPocket"
+            android:textColor="#F8FAFC"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="10dp" />
+
+        <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:gravity="center_horizontal"
-            android:visibility="gone">
+            android:text="Installing Debian, preparing your terminal, and connecting the IDE backend."
+            android:textColor="#A5B4C3"
+            android:textSize="14sp"
+            android:textAlignment="center"
+            android:layout_marginBottom="28dp" />
 
-            <ImageView
-                android:layout_width="120dp"
-                android:layout_height="120dp"
-                android:src="@drawable/dp_logo_iv"
-                android:contentDescription="@string/app_name"
-                android:layout_marginBottom="24dp" />
+        <ProgressBar
+            android:id="@+id/progress_install"
+            style="@android:style/Widget.ProgressBar.Horizontal"
+            android:layout_width="match_parent"
+            android:layout_height="10dp"
+            android:max="100"
+            android:progress="0"
+            android:progressTint="#2DD4BF"
+            android:progressBackgroundTint="#223041"
+            android:layout_marginBottom="18dp" />
 
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Welcome to DevPocket"
-                android:textColor="#CDD6F4"
-                android:textSize="24sp"
-                android:textStyle="bold"
-                android:textAlignment="center"
-                android:layout_marginBottom="16dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="A mobile IDE with real terminal support. This setup wizard will prepare your Debian environment."
-                android:textColor="#A6ADC8"
-                android:textSize="14sp"
-                android:textAlignment="center"
-                android:layout_marginBottom="32dp" />
-
-            <Button
-                android:id="@+id/btn_begin_onboarding"
-                android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:text="Begin Setup"
-                android:textColor="#FFF"
-                android:background="@drawable/btn_primary"
-                android:textStyle="bold" />
-
-        </LinearLayout>
-
-        <!-- Step 2: Account Setup -->
-        <LinearLayout
-            android:id="@+id/step_account_setup"
+        <TextView
+            android:id="@+id/tv_install_status"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:gravity="center_horizontal"
-            android:visibility="gone">
+            android:text="Preparing DevPocket"
+            android:textColor="#E2E8F0"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textAlignment="center"
+            android:layout_marginBottom="8dp" />
 
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Create Your Account"
-                android:textColor="#CDD6F4"
-                android:textSize="20sp"
-                android:textStyle="bold"
-                android:layout_marginBottom="24dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Username (required)"
-                android:textColor="#A6ADC8"
-                android:textSize="12sp"
-                android:layout_marginBottom="8dp" />
-
-            <EditText
-                android:id="@+id/et_username"
-                android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:hint="devpocket"
-                android:textColorHint="#6C7086"
-                android:textColor="#CDD6F4"
-                android:padding="12dp"
-                android:background="@drawable/et_background"
-                android:inputType="text"
-                android:layout_marginBottom="24dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="This username will be used inside the Debian terminal environment."
-                android:textColor="#6C7086"
-                android:textSize="12sp"
-                android:layout_marginBottom="32dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Sudo Access Mode"
-                android:textColor="#A6ADC8"
-                android:textSize="12sp"
-                android:layout_marginBottom="12dp" />
-
-            <RadioGroup
-                android:id="@+id/rg_sudo_mode"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:layout_marginBottom="24dp">
-
-                <RadioButton
-                    android:id="@+id/rb_sudo_passwordless"
-                    android:layout_width="match_parent"
-                    android:layout_height="40dp"
-                    android:text="Passwordless (recommended for mobile)"
-                    android:textColor="#CDD6F4"
-                    android:textSize="14sp"
-                    android:checked="true"
-                    android:padding="8dp" />
-
-                <RadioButton
-                    android:id="@+id/rb_sudo_password"
-                    android:layout_width="match_parent"
-                    android:layout_height="40dp"
-                    android:text="Password-protected (more secure)"
-                    android:textColor="#CDD6F4"
-                    android:textSize="14sp"
-                    android:padding="8dp"
-                    android:layout_marginTop="8dp" />
-
-            </RadioGroup>
-
-            <!-- Password field (shown when password-protected is selected) -->
-            <EditText
-                android:id="@+id/et_sudo_password"
-                android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:inputType="textPassword"
-                android:hint="Enter sudo password"
-                android:textColor="#CDD6F4"
-                android:textColorHint="#6C7086"
-                android:textSize="14sp"
-                android:padding="12dp"
-                android:background="@drawable/et_background"
-                android:visibility="gone"
-                android:layout_marginBottom="16dp" />
-
-            <EditText
-                android:id="@+id/et_sudo_password_confirm"
-                android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:inputType="textPassword"
-                android:hint="Confirm password"
-                android:textColor="#CDD6F4"
-                android:textColorHint="#6C7086"
-                android:textSize="14sp"
-                android:padding="12dp"
-                android:background="@drawable/et_background"
-                android:visibility="gone"
-                android:layout_marginBottom="24dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Sudo lets you run commands as administrator. Passwordless is easier on mobile, but less secure."
-                android:textColor="#6C7086"
-                android:textSize="12sp"
-                android:layout_marginBottom="32dp" />
-
-            <Button
-                android:id="@+id/btn_account_setup_next"
-                android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:text="Continue"
-                android:textColor="#FFF"
-                android:background="@drawable/btn_primary"
-                android:textStyle="bold" />
-
-        </LinearLayout>
-
-        <!-- Step 3: Guide -->
-        <LinearLayout
-            android:id="@+id/step_guide"
+        <TextView
+            android:id="@+id/tv_install_detail"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:gravity="center_horizontal"
-            android:visibility="gone">
+            android:text="Initializing runtime"
+            android:textColor="#94A3B8"
+            android:textSize="13sp"
+            android:textAlignment="center"
+            android:layout_marginBottom="24dp" />
 
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="About Your Setup"
-                android:textColor="#CDD6F4"
-                android:textSize="20sp"
-                android:textStyle="bold"
-                android:layout_marginBottom="24dp" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp"
-                android:background="@drawable/card_background"
-                android:layout_marginBottom="16dp">
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="🖥️ Terminal Environment"
-                    android:textColor="#CDD6F4"
-                    android:textSize="14sp"
-                    android:textStyle="bold"
-                    android:layout_marginBottom="8dp" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="A Debian Linux environment will be installed to /data/data/com.theia.mobile/files/linux. This is your primary workspace."
-                    android:textColor="#A6ADC8"
-                    android:textSize="12sp"
-                    android:layout_marginBottom="16dp" />
-
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp"
-                android:background="@drawable/card_background"
-                android:layout_marginBottom="16dp">
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="📦 Package Manager"
-                    android:textColor="#CDD6F4"
-                    android:textSize="14sp"
-                    android:textStyle="bold"
-                    android:layout_marginBottom="8dp" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Use 'apt' to install tools like git, python, node, etc. No heavy packages are preinstalled."
-                    android:textColor="#A6ADC8"
-                    android:textSize="12sp"
-                    android:layout_marginBottom="16dp" />
-
-            </LinearLayout>
-
-            <Button
-                android:id="@+id/btn_guide_next"
-                android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:text="Continue Setup"
-                android:textColor="#FFF"
-                android:background="@drawable/btn_primary"
-                android:textStyle="bold" />
-
-        </LinearLayout>
-
-        <!-- Step 4: Preflight Checks -->
-        <LinearLayout
-            android:id="@+id/step_preflight"
+        <Button
+            android:id="@+id/btn_retry_install"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:gravity="center_horizontal"
-            android:visibility="gone">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Installation Ready"
-                android:textColor="#CDD6F4"
-                android:textSize="20sp"
-                android:textStyle="bold"
-                android:layout_marginBottom="24dp" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp"
-                android:background="@drawable/card_background"
-                android:layout_marginBottom="24dp">
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="What will happen:"
-                    android:textColor="#CDD6F4"
-                    android:textSize="14sp"
-                    android:textStyle="bold"
-                    android:layout_marginBottom="12dp" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="• A minimal Debian rootfs will be downloaded (~150MB)"
-                    android:textColor="#A6ADC8"
-                    android:textSize="12sp"
-                    android:layout_marginBottom="8dp" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="• The environment will be extracted to app-private storage"
-                    android:textColor="#A6ADC8"
-                    android:textSize="12sp"
-                    android:layout_marginBottom="8dp" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="• Your user account will be configured"
-                    android:textColor="#A6ADC8"
-                    android:textSize="12sp"
-                    android:layout_marginBottom="8dp" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="• The IDE backend will be started"
-                    android:textColor="#A6ADC8"
-                    android:textSize="12sp" />
-
-            </LinearLayout>
-
-            <Button
-                android:id="@+id/btn_preflight_install"
-                android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:text="Download &amp; Install"
-                android:textColor="#FFF"
-                android:background="@drawable/btn_primary"
-                android:textStyle="bold" />
-
-        </LinearLayout>
-
-        <!-- Optional confirmation step kept for flow compatibility -->
-        <LinearLayout
-            android:id="@+id/step_install_confirm"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:gravity="center_horizontal"
-            android:visibility="gone">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Confirm Installation"
-                android:textColor="#CDD6F4"
-                android:textSize="20sp"
-                android:textStyle="bold"
-                android:layout_marginBottom="16dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="DevPocket will now install the Debian runtime in app-private storage."
-                android:textColor="#A6ADC8"
-                android:textSize="12sp"
-                android:layout_marginBottom="24dp" />
-
-            <Button
-                android:id="@+id/btn_install_confirm"
-                android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:text="Start Installation"
-                android:textColor="#FFF"
-                android:background="@drawable/btn_primary"
-                android:textStyle="bold" />
-
-        </LinearLayout>
-
-        <!-- Step 5: Installing -->
-        <LinearLayout
-            android:id="@+id/step_installing"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:gravity="center_horizontal"
-            android:visibility="gone">
-
-            <ImageView
-                android:layout_width="80dp"
-                android:layout_height="80dp"
-                android:src="@drawable/dp_logo_iv"
-                android:contentDescription="@string/app_name"
-                android:layout_marginBottom="24dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Installing Debian"
-                android:textColor="#CDD6F4"
-                android:textSize="18sp"
-                android:textStyle="bold"
-                android:textAlignment="center"
-                android:layout_marginBottom="24dp" />
-
-            <ProgressBar
-                android:id="@+id/progress_install"
-                style="@android:style/Widget.ProgressBar.Horizontal"
-                android:layout_width="240dp"
-                android:layout_height="8dp"
-                android:progress="0"
-                android:layout_marginBottom="16dp" />
-
-            <TextView
-                android:id="@+id/tv_install_status"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Initializing..."
-                android:textColor="#A6ADC8"
-                android:textSize="12sp"
-                android:textAlignment="center" />
-
-        </LinearLayout>
-
-        <!-- Step 6: Complete -->
-        <LinearLayout
-            android:id="@+id/step_complete"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:gravity="center_horizontal"
-            android:visibility="gone">
-
-            <ImageView
-                android:layout_width="120dp"
-                android:layout_height="120dp"
-                android:src="@drawable/dp_logo_iv"
-                android:contentDescription="@string/app_name"
-                android:layout_marginBottom="24dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Setup Complete!"
-                android:textColor="#CDD6F4"
-                android:textSize="24sp"
-                android:textStyle="bold"
-                android:textAlignment="center"
-                android:layout_marginBottom="16dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Your Debian terminal environment is ready. Tap Continue to open the IDE."
-                android:textColor="#A6ADC8"
-                android:textSize="14sp"
-                android:textAlignment="center"
-                android:layout_marginBottom="32dp" />
-
-            <Button
-                android:id="@+id/btn_launch_ide"
-                android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:text="Open IDE"
-                android:textColor="#FFF"
-                android:background="@drawable/btn_primary"
-                android:textStyle="bold" />
-
-        </LinearLayout>
+            android:layout_height="48dp"
+            android:text="Retry Setup"
+            android:textColor="#FFF"
+            android:textStyle="bold"
+            android:background="@drawable/btn_primary"
+            android:visibility="gone" />
 
     </LinearLayout>
 
-</ScrollView>
+</FrameLayout>

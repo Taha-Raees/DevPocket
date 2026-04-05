@@ -28,8 +28,8 @@ This project has a comprehensive memory system at `.claude/projects/-home-...-De
 - Min SDK: 24, Target SDK: 36
 - Architecture: Monorepo with Lerna (58 Theia extension packages)
 - Frontend: React 18.2 + TypeScript + Lumino widgets
-- Backend: Node.js (ARM64 binary bundled in APK)
-- Terminal: **Real PTY via node-pty (2026-03-30)** with pipe fallback safety
+- Backend: Node.js installed into an embedded Termux prefix on first launch
+- Terminal: Debian launched through official `proot-distro` via a thin app shell wrapper
 
 ---
 
@@ -58,6 +58,33 @@ This project has a comprehensive memory system at `.claude/projects/-home-...-De
 │  - XTerm.js Terminal UI                     │
 └─────────────────────────────────────────────┘
 ```
+
+---
+
+## Recent Changes (2026-04-05)
+
+### ✅ CHANGED: Embedded Termux + Official proot-distro Flow
+
+**Runtime model now:**
+- `BootstrapInstallerService.kt` now downloads the official Termux bootstrap, extracts it into `files/usr`, patches text scripts to the app prefix, runs `pkg update && pkg upgrade`, installs `proot proot-distro nodejs`, and then installs Debian with official `proot-distro`
+- `TheiaBackendService.kt` now runs the backend with Node.js from the embedded Termux prefix
+- Debian is used for terminal sessions through `devpocket-shell`, which now delegates to `proot-distro login debian`
+- Backend startup no longer passes a default workspace argument, so the IDE does not auto-open `/root` or `/home/<user>/code`
+
+**Onboarding changes:**
+- `OnboardingActivity.kt` is now a single automatic preparation screen
+- The runtime seeds the internal account state as `root` to match default `proot-distro` behavior
+- The screen loads `logo2.svg` from Android assets and shows install/backend progress on one page
+- After bootstrap, package install, and Debian install complete, onboarding waits for backend HTTP readiness and then opens the IDE
+
+**Shell behavior changes:**
+- `devpocket-shell` no longer falls back to Android `/system/bin/sh`; missing embedded Termux / `proot-distro` now fails loudly
+- `shell-process.ts`, plugin-host, and Android polyfills now prefer the Termux prefix wrapper path directly when Debian mode is configured
+- Debian root gets shortcuts to Android shared storage such as `~/storage`, `~/Download`, and `~/Documents`
+
+**Important architecture note:**
+- The app no longer manages a custom Debian rootfs installer
+- The remaining custom wrapper layer is intentionally thin: one Termux env wrapper and one Debian shell wrapper around official `proot-distro`
 
 ---
 
@@ -168,7 +195,7 @@ This project has a comprehensive memory system at `.claude/projects/-home-...-De
 - Runtime asset assembly now bundles `proot` in [`products/theia-android-lite/scripts/build-runtime-assets.mjs`](products/theia-android-lite/scripts/build-runtime-assets.mjs)
 - Android installer path now downloads a Debian-root userland archive, verifies checksum, extracts it, creates a Linux user, and writes a wrapper in [`android-app/android/app/src/main/java/com/theia/mobile/BootstrapInstallerService.kt`](android-app/android/app/src/main/java/com/theia/mobile/BootstrapInstallerService.kt)
 - Terminal corruption from injected `stty cols ... rows ...` in the Android pipe fallback was removed in [`packages/process/src/node/terminal-process.ts`](packages/process/src/node/terminal-process.ts)
-- Current blocker: **true Debian shell launch is still not reliable** under the present `proot` + rootfs combination, so the wrapper currently falls back to Android `/system/bin/sh`
+- Historical blocker at that time: Debian shell launch was still unreliable under the old custom `proot` + rootfs path. This was replaced later by the embedded Termux + official `proot-distro` flow.
 
 **New Android/Kotlin files introduced:**
 - `android-app/android/app/src/main/java/com/theia/mobile/OnboardingActivity.kt`

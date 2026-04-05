@@ -132,6 +132,13 @@ class TheiaBackendService : Service() {
 
     @Throws(IOException::class)
     private fun createProcessBuilder(port: Int): ProcessBuilder {
+        val termuxPrefix = TheiaRuntimePaths.termuxPrefix(this)
+        val termuxHome = TheiaRuntimePaths.termuxHome(this)
+        val termuxTmp = TheiaRuntimePaths.termuxTmp(this)
+        val termuxBinDir = TheiaRuntimePaths.termuxBin(this)
+        val termuxLibDir = TheiaRuntimePaths.termuxLib(this)
+        val termuxShellWrapper = TheiaRuntimePaths.termuxShellWrapper(this)
+        val termuxEnvWrapper = TheiaRuntimePaths.termuxEnvWrapper(this)
         val node = TheiaRuntimePaths.nodeBinary(this)
         val entry = TheiaRuntimePaths.backendEntrypoint(this)
         if (!node.exists()) {
@@ -142,25 +149,27 @@ class TheiaBackendService : Service() {
         }
 
         val workspace = TheiaRuntimePaths.getIdeWorkspace(this)
-        if (!workspace.exists()) {
-            workspace.mkdirs()
-        }
+        termuxHome.mkdirs()
+        termuxTmp.mkdirs()
 
         val configDir = TheiaRuntimePaths.configDir(this)
         configDir.mkdirs()
 
         val extensionsDir = ensureBundledExtensionsExtracted()
 
-        logLine("IDE workspace resolved to: ${workspace.absolutePath}")
+        logLine("Debian home resolved to: ${workspace.absolutePath}")
+        logLine("Launching backend without a default workspace argument")
 
         val runtimeRoot = TheiaRuntimePaths.runtimeRoot(this)
         val runtimeBin = File(runtimeRoot, "bin").absolutePath
         val runtimeLib = File(runtimeRoot, "lib").absolutePath
+        val termuxBin = termuxBinDir.absolutePath
+        val termuxLib = termuxLibDir.absolutePath
 
         val command = mutableListOf(
+            termuxEnvWrapper.absolutePath,
             node.absolutePath,
             entry.absolutePath,
-            workspace.absolutePath,
             "--hostname", "127.0.0.1",
             "--port", port.toString(),
             "--plugins=local-dir:${extensionsDir.absolutePath}"
@@ -172,18 +181,20 @@ class TheiaBackendService : Service() {
         }
 
         val builder = ProcessBuilder(command)
-        builder.directory(runtimeRoot)
+        builder.directory(termuxHome)
 
         val env = builder.environment()
         val existingPath = env.getOrDefault("PATH", "")
-        env["PATH"] = "$runtimeBin:$existingPath"
-        env["LD_LIBRARY_PATH"] = runtimeLib
-        env["HOME"] = workspace.absolutePath
+        env["PATH"] = "$termuxBin:$runtimeBin:$existingPath"
+        env["LD_LIBRARY_PATH"] = "$termuxLib:$runtimeLib"
+        env["PREFIX"] = termuxPrefix.absolutePath
+        env["HOME"] = termuxHome.absolutePath
+        env["TMPDIR"] = termuxTmp.absolutePath
 
         val onboardingManager = OnboardingStateManager(this)
         val onboardingConfig = onboardingManager.getConfig()
         if (!onboardingConfig.username.isNullOrBlank()) {
-            val debianRoot = File(filesDir, "linux/debian")
+            val debianRoot = TheiaRuntimePaths.getDebianRoot(this)
             if (debianRoot.exists()) {
                 env["DEVPOCKET_DEBIAN_ROOT"] = debianRoot.absolutePath
                 env["DEVPOCKET_USER"] = onboardingConfig.username
@@ -203,25 +214,26 @@ class TheiaBackendService : Service() {
         env["THEIA_APP_PROJECT_PATH"] = File(runtimeRoot, "theia-android-lite").absolutePath
         env["OPENSSL_CONF"] = "/dev/null"
 
-        val termuxBash = File(runtimeBin, "bash")
-        val termuxSh = File(runtimeBin, "sh")
-        val resolvedShell = if (termuxBash.exists()) termuxBash.absolutePath else if (termuxSh.exists()) termuxSh.absolutePath else "/system/bin/sh"
-        val effectiveShell = env["THEIA_SHELL"]?.takeIf { it.isNotBlank() } ?: resolvedShell
+        val effectiveShell = env["THEIA_SHELL"]?.takeIf { it.isNotBlank() } ?: termuxShellWrapper.absolutePath
         env["SHELL"] = effectiveShell
         env["THEIA_SHELL"] = effectiveShell
-        env["npm_config_script_shell"] = resolvedShell
-        env["npm_config_shell"] = resolvedShell
+        env["npm_config_script_shell"] = effectiveShell
+        env["npm_config_shell"] = effectiveShell
         env["THEIA_WEBVIEW_EXTERNAL_ENDPOINT"] = "{{hostname}}"
         env["CHOKIDAR_USEPOLLING"] = "1"
         env["CHOKIDAR_INTERVAL"] = "1000"
         env["THEIA_DISABLE_TRASH"] = "true"
 
-        val gitExecPath = File(File(runtimeRoot, "bin"), "libexec/git-core").absolutePath
-        env["GIT_EXEC_PATH"] = gitExecPath
-        env["GIT_CONFIG_NOSYSTEM"] = "1"
-        env["GIT_TEMPLATE_DIR"] = ""
+        val gitExecPath = File(termuxPrefix, "libexec/git-core")
+        if (gitExecPath.exists()) {
+            env["GIT_EXEC_PATH"] = gitExecPath.absolutePath
+            env["GIT_CONFIG_NOSYSTEM"] = "1"
+            env["GIT_TEMPLATE_DIR"] = ""
+        }
 
-        val caCertPath = File(runtimeRoot, "etc/ca-certificates/cacert.pem")
+        val termuxCaCert = File(termuxPrefix, "etc/tls/cert.pem")
+        val runtimeCaCert = File(runtimeRoot, "etc/ca-certificates/cacert.pem")
+        val caCertPath = if (termuxCaCert.exists()) termuxCaCert else runtimeCaCert
         if (caCertPath.exists()) {
             env["SSL_CERT_FILE"] = caCertPath.absolutePath
             env["GIT_SSL_CAINFO"] = caCertPath.absolutePath
