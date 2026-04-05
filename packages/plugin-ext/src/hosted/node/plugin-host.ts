@@ -189,9 +189,9 @@ function patchSpawnSyncOptions(options: cp.SpawnSyncOptions = {}): cp.SpawnSyncO
 ) => {
     const safeCommand = sanitizeCommandPath(command);
     if (Array.isArray(argsOrOptions)) {
-        return originalSpawnSync(safeCommand, argsOrOptions as string[], patchSpawnSyncOptions(safeCommand, maybeOptions));
+        return originalSpawnSync(safeCommand, argsOrOptions as string[], patchSpawnSyncOptions(maybeOptions));
     }
-    return originalSpawnSync(safeCommand, [], patchSpawnSyncOptions(safeCommand, argsOrOptions as cp.SpawnSyncOptions));
+    return originalSpawnSync(safeCommand, [], patchSpawnSyncOptions(argsOrOptions as cp.SpawnSyncOptions));
 }) as typeof cp.spawnSync;
 
 console.error('[android-lite][plugin-host] shell diagnostics', {
