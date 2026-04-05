@@ -722,7 +722,28 @@ class BootstrapInstallerService(private val context: Context) {
         phase: String,
         extraEnv: Map<String, String> = emptyMap()
     ) {
-        runTermuxCommand(command, phase, extraEnv, termuxCompatWrapper)
+        runTermuxCommand(command.map { toCompatGuestPath(it) }, phase, extraEnv, termuxCompatWrapper)
+    }
+
+    private fun toCompatGuestPath(value: String): String {
+        return when {
+            value == termuxPrefix.absolutePath -> "/data/data/com.termux/files/usr"
+            value.startsWith(termuxPrefix.absolutePath + "/") ->
+                "/data/data/com.termux/files/usr/" + value.removePrefix(termuxPrefix.absolutePath + "/")
+            value == termuxHome.absolutePath -> "/data/data/com.termux/files/home"
+            value.startsWith(termuxHome.absolutePath + "/") ->
+                "/data/data/com.termux/files/home/" + value.removePrefix(termuxHome.absolutePath + "/")
+            value == termuxTmp.absolutePath -> "/data/data/com.termux/files/usr/tmp"
+            value.startsWith(termuxTmp.absolutePath + "/") ->
+                "/data/data/com.termux/files/usr/tmp/" + value.removePrefix(termuxTmp.absolutePath + "/")
+            value == context.filesDir.absolutePath -> "/data/data/com.termux/files"
+            value.startsWith(context.filesDir.absolutePath + "/") ->
+                "/data/data/com.termux/files/" + value.removePrefix(context.filesDir.absolutePath + "/")
+            value == context.cacheDir.absolutePath -> "/data/data/com.termux/cache"
+            value.startsWith(context.cacheDir.absolutePath + "/") ->
+                "/data/data/com.termux/cache/" + value.removePrefix(context.cacheDir.absolutePath + "/")
+            else -> value
+        }
     }
 
     private fun runTermuxShellCommand(
