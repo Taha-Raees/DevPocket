@@ -603,53 +603,23 @@ class BootstrapInstallerService(private val context: Context) {
 
         val compatWrapper = buildString {
             appendLine("#!/system/bin/sh")
-            appendLine("APP_FILES=\"${context.filesDir.absolutePath}\"")
-            appendLine("APP_CACHE=\"${context.cacheDir.absolutePath}\"")
-            appendLine("HOST_PREFIX=\"${termuxPrefix.absolutePath}\"")
-            appendLine("HOST_HOME=\"${termuxHome.absolutePath}\"")
-            appendLine("HOST_TMP=\"${termuxTmp.absolutePath}\"")
-            appendLine("HOST_BASH=\"${termuxPrefix.absolutePath}/bin/bash\"")
-            appendLine("LEGACY_FILES=\"/data/data/com.termux/files\"")
-            appendLine("LEGACY_CACHE=\"/data/data/com.termux/cache\"")
-            appendLine("LEGACY_PREFIX=\"/data/data/com.termux/files/usr\"")
-            appendLine("LEGACY_HOME=\"/data/data/com.termux/files/home\"")
-            appendLine("LEGACY_TMP=\"/data/data/com.termux/files/usr/tmp\"")
-            appendLine("PROOT_BIN=\"${runtimeProot.absolutePath}\"")
-            appendLine("export PROOT_TMP_DIR=\"${termuxCompatCache.absolutePath}\"")
-            appendLine("export PROOT_NO_SECCOMP=1")
-            appendLine("if [ ! -x \"${runtimeProot.absolutePath}\" ]; then")
-            appendLine("  echo \"DevPocket error: missing bundled compatibility proot at ${runtimeProot.absolutePath}\" >&2")
-            appendLine("  exit 127")
+            appendLine("export PREFIX=\"${termuxPrefix.absolutePath}\"")
+            appendLine("export HOME=\"${termuxHome.absolutePath}\"")
+            appendLine("export TMPDIR=\"${termuxTmp.absolutePath}\"")
+            appendLine("export PATH=\"${termuxBin.absolutePath}:/system/bin\"")
+            appendLine("export LD_LIBRARY_PATH=\"${termuxLib.absolutePath}\${'$'}{LD_LIBRARY_PATH:+:\${LD_LIBRARY_PATH}}\"")
+            appendLine("export LANG=\"C.UTF-8\"")
+            appendLine("export LC_ALL=\"C.UTF-8\"")
+            appendLine("export TERM=\"xterm-256color\"")
+            appendLine("export COLORTERM=\"truecolor\"")
+            appendLine("export ANDROID_STORAGE=\"/sdcard\"")
+            appendLine("TERMUX_UID=\$(id -u 2>/dev/null || true)")
+            appendLine("if [ -n \"\${TERMUX_UID}\" ]; then")
+            appendLine("  export TERMUX__UID=\"\${TERMUX_UID}\"")
+            appendLine("  export TERMUX__USER_ID=\"\${TERMUX_UID}\"")
             appendLine("fi")
             appendLine("mkdir -p \"${termuxHome.absolutePath}\" \"${termuxTmp.absolutePath}\" \"${termuxCompatCache.absolutePath}\" 2>/dev/null")
-            appendLine("TERMUX_UID=\$(id -u 2>/dev/null || true)")
-            appendLine("echo \"DevPocket: host Termux compatibility mode (launcher=\${PROOT_BIN} host-prefix=\${HOST_PREFIX} host-bash=\${HOST_BASH} legacy-prefix=\${LEGACY_PREFIX})\" >&2")
-            appendLine("if [ ! -x \"\${HOST_BASH}\" ]; then")
-            appendLine("  echo \"DevPocket error: missing host bash binary at \${HOST_BASH}\" >&2")
-            appendLine("  exit 127")
-            appendLine("fi")
-            appendLine("exec \"\${PROOT_BIN}\" --kill-on-exit --link2symlink -0 -r / \\")
-            appendLine("  -b /system -b /apex -b /dev -b /proc -b /sys -b /sdcard -b /storage \\")
-            appendLine("  -b \"${context.filesDir.absolutePath}:${context.filesDir.absolutePath}\" \\")
-            appendLine("  -b \"${context.cacheDir.absolutePath}:${context.cacheDir.absolutePath}\" \\")
-            appendLine("  -b \"${context.filesDir.absolutePath}:\${LEGACY_FILES}\" \\")
-            appendLine("  -b \"${termuxPrefix.absolutePath}:${termuxPrefix.absolutePath}\" \\")
-            appendLine("  -b \"${termuxHome.absolutePath}:${termuxHome.absolutePath}\" \\")
-            appendLine("  -b \"${termuxTmp.absolutePath}:${termuxTmp.absolutePath}\" \\")
-            appendLine("  -b \"${termuxPrefix.absolutePath}:\${LEGACY_PREFIX}\" \\")
-            appendLine("  -b \"${termuxHome.absolutePath}:\${LEGACY_HOME}\" \\")
-            appendLine("  -b \"${termuxTmp.absolutePath}:\${LEGACY_TMP}\" \\")
-            appendLine("  -b \"${context.cacheDir.absolutePath}:\${LEGACY_CACHE}\" \\")
-            appendLine("  -w / \\")
-            appendLine("  /system/bin/sh -c '\\")
-            appendLine("    export PREFIX=\"\${LEGACY_PREFIX}\"; \\")
-            appendLine("    export HOME=\"\${LEGACY_HOME}\"; \\")
-            appendLine("    export TMPDIR=\"\${LEGACY_TMP}\"; \\")
-            appendLine("    export PATH=\"\${HOST_PREFIX}/bin:\${LEGACY_PREFIX}/bin:/system/bin\"; \\")
-            appendLine("    export LD_LIBRARY_PATH=\"\${HOST_PREFIX}/lib:\${LEGACY_PREFIX}/lib\"; \\")
-            appendLine("    export LANG=C.UTF-8 LC_ALL=C.UTF-8 TERM=xterm-256color COLORTERM=truecolor ANDROID_STORAGE=/sdcard; \\")
-            appendLine("    export TERMUX__UID=\"\${TERMUX_UID}\" TERMUX__USER_ID=\"\${TERMUX_UID}\"; \\")
-            appendLine("    exec \"\$@\"' sh \"\$@\"")
+            appendLine("exec \"\$@\"")
         }
         termuxCompatWrapper.writeText(compatWrapper)
         termuxCompatWrapper.setExecutable(true, false)
@@ -722,28 +692,12 @@ class BootstrapInstallerService(private val context: Context) {
         phase: String,
         extraEnv: Map<String, String> = emptyMap()
     ) {
-        runTermuxCommand(command.map { toCompatGuestPath(it) }, phase, extraEnv, termuxCompatWrapper)
-    }
-
-    private fun toCompatGuestPath(value: String): String {
-        return when {
-            value == termuxPrefix.absolutePath -> "/data/data/com.termux/files/usr"
-            value.startsWith(termuxPrefix.absolutePath + "/") ->
-                "/data/data/com.termux/files/usr/" + value.removePrefix(termuxPrefix.absolutePath + "/")
-            value == termuxHome.absolutePath -> "/data/data/com.termux/files/home"
-            value.startsWith(termuxHome.absolutePath + "/") ->
-                "/data/data/com.termux/files/home/" + value.removePrefix(termuxHome.absolutePath + "/")
-            value == termuxTmp.absolutePath -> "/data/data/com.termux/files/usr/tmp"
-            value.startsWith(termuxTmp.absolutePath + "/") ->
-                "/data/data/com.termux/files/usr/tmp/" + value.removePrefix(termuxTmp.absolutePath + "/")
-            value == context.filesDir.absolutePath -> "/data/data/com.termux/files"
-            value.startsWith(context.filesDir.absolutePath + "/") ->
-                "/data/data/com.termux/files/" + value.removePrefix(context.filesDir.absolutePath + "/")
-            value == context.cacheDir.absolutePath -> "/data/data/com.termux/cache"
-            value.startsWith(context.cacheDir.absolutePath + "/") ->
-                "/data/data/com.termux/cache/" + value.removePrefix(context.cacheDir.absolutePath + "/")
-            else -> value
-        }
+        val dpkgEnv = mapOf(
+            "DPKG_ROOT" to termuxPrefix.absolutePath,
+            "DPKG_ADMINDIR" to File(termuxPrefix, "var/lib/dpkg").absolutePath,
+            "DPKG_FORCE" to "script-chrootless"
+        )
+        runTermuxCommand(command, phase, extraEnv + dpkgEnv, termuxEnvWrapper)
     }
 
     private fun runTermuxShellCommand(
