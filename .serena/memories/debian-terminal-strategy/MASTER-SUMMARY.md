@@ -124,7 +124,8 @@ This document captures the complete 15-phase plan to transform DevPocket from an
 - Runtime now downloads the official Termux bootstrap into `files/usr`, patches text scripts to the app prefix, installs `proot`, `proot-distro`, and `nodejs`, and provisions Debian with official `proot-distro`
 - `devpocket-shell` now lives in the Termux prefix and wraps `proot-distro login debian` with only the app-specific binds needed by the IDE
 - Installer now runs the Termux bootstrap second-stage explicitly and avoids `pkg upgrade` during first-run onboarding to reduce bootstrap failures
-- Upstream Termux binaries still hardcode `/data/data/com.termux/files/...`, so bootstrap/package-manager/debian-login commands now use a thin compatibility launcher backed by the prebundled runtime `proot` to bind the app sandbox to those canonical paths
+- Upstream Termux binaries still hardcode `/data/data/com.termux/files/...`, so bootstrap/package-manager/debian-login commands now use an outer compatibility `proot` root that binds the app sandbox to those canonical paths
+- The installer now pre-creates `dpkg`/`apt` state under the embedded prefix before running bootstrap second-stage
 
 ---
 

@@ -91,7 +91,8 @@ This project has a comprehensive memory system at `.claude/projects/-home-...-De
 - First-boot host setup now runs the Termux bootstrap second-stage explicitly after extraction
 - First-boot package setup uses `pkg update` before `pkg install proot proot-distro nodejs`; it no longer runs `pkg upgrade` during onboarding
 - Installer failures now preserve the last captured command output so the loading screen shows the real failing lines instead of only an exit code
-- The compatibility launcher is used only for hardcoded-path Termux commands (`dpkg`, `pkg`, `proot-distro`) so the backend can remain outside Debian while stock bootstrap binaries still work
+- The compatibility launcher is again a real outer `proot` root that binds the app sandbox to `/data/data/com.termux/files` for stock Termux binaries while the backend remains outside Debian
+- Termux package-manager state (`dpkg`, `apt`) is pre-created under the embedded prefix before bootstrap second-stage runs
 
 ---
 

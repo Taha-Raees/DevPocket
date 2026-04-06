@@ -32,9 +32,12 @@ class BootstrapInstallerService(private val context: Context) {
         private const val DEBIAN_ALIAS = "debian"
         private const val ROOT_USERNAME = "root"
         private const val TEXT_PATCH_LIMIT_BYTES = 5L * 1024L * 1024L
+        private const val LEGACY_TERMUX_FILES = "/data/data/com.termux/files"
+        private const val LEGACY_TERMUX_CACHE = "/data/data/com.termux/cache"
         private const val LEGACY_TERMUX_PREFIX = "/data/data/com.termux/files/usr"
         private const val LEGACY_TERMUX_HOME = "/data/data/com.termux/files/home"
-        private const val MAX_DIAGNOSTIC_LINES = 12
+        private const val LEGACY_TERMUX_TMP = "/data/data/com.termux/files/usr/tmp"
+        private const val MAX_DIAGNOSTIC_LINES = 30
 
         private data class BootstrapArchive(
             val arch: String,
@@ -149,6 +152,7 @@ class BootstrapInstallerService(private val context: Context) {
             ensureBaseDirectories()
             patchTextPrefixReferences()
             markExecutables(termuxPrefix)
+            ensureTermuxPackageManagerDirectories()
             writeWrapperScripts()
             if (debianRoot.exists()) {
                 finalizeDebianEnvironment()
@@ -209,6 +213,8 @@ class BootstrapInstallerService(private val context: Context) {
             Log.i(TAG, "Termux bootstrap already present at ${termuxPrefix.absolutePath}")
             patchTextPrefixReferences()
             markExecutables(termuxPrefix)
+            ensureTermuxPackageManagerDirectories()
+            writeWrapperScripts()
             ensureBootstrapSecondStageCompleted()
             return
         }
@@ -232,6 +238,7 @@ class BootstrapInstallerService(private val context: Context) {
         restoreBootstrapSymlinks()
         patchTextPrefixReferences()
         markExecutables(termuxPrefix)
+        ensureTermuxPackageManagerDirectories()
         writeWrapperScripts()
         ensureBootstrapSecondStageCompleted()
     }
@@ -263,6 +270,61 @@ class BootstrapInstallerService(private val context: Context) {
             termuxDpkgEnv()
         )
         publishProgress("bootstrap-configuring", 100, 100)
+    }
+
+    private fun ensureTermuxPackageManagerDirectories() {
+        listOf(
+            "var/lib/dpkg/info",
+            "var/lib/dpkg/updates",
+            "var/lib/dpkg/parts",
+            "var/lib/dpkg/triggers",
+            "var/lib/apt/lists/partial",
+            "var/cache/apt/archives/partial",
+            "var/log/apt",
+            "etc/dpkg/dpkg.cfg.d",
+            "etc/apt/apt.conf.d",
+            "etc/apt/sources.list.d",
+            "etc/apt/preferences.d",
+            "tmp"
+        ).forEach { relativePath ->
+            File(termuxPrefix, relativePath).mkdirs()
+        }
+
+        listOf(
+            "var/lib/dpkg/lock",
+            "var/lib/dpkg/lock-frontend"
+        ).forEach { relativePath ->
+            val lockFile = File(termuxPrefix, relativePath)
+            lockFile.parentFile?.mkdirs()
+            if (!lockFile.exists()) {
+                lockFile.createNewFile()
+            }
+        }
+
+        val statusFile = File(termuxPrefix, "var/lib/dpkg/status")
+        if (!statusFile.exists()) {
+            statusFile.parentFile?.mkdirs()
+            statusFile.createNewFile()
+        }
+
+        val dpkgCfgDir = File(termuxPrefix, "etc/dpkg/dpkg.cfg.d")
+        dpkgCfgDir.mkdirs()
+        val dpkgCfg = File(dpkgCfgDir, "01-devpocket")
+        dpkgCfg.writeText("force-confnew\n")
+
+        ensureAptConfig()
+    }
+
+    private fun ensureAptConfig() {
+        val aptConfDir = File(termuxPrefix, "etc/apt/apt.conf.d")
+        aptConfDir.mkdirs()
+        val aptConf = File(aptConfDir, "01-devpocket")
+        aptConf.writeText(
+            buildString {
+                appendLine("APT::Sandbox::User \"root\";")
+                appendLine("Dir::Bin::dpkg \"$LEGACY_TERMUX_PREFIX/bin/dpkg\";")
+            }
+        )
     }
 
     private fun downloadFile(url: String, outputFile: File) {
@@ -603,23 +665,52 @@ class BootstrapInstallerService(private val context: Context) {
 
         val compatWrapper = buildString {
             appendLine("#!/system/bin/sh")
-            appendLine("export PREFIX=\"${termuxPrefix.absolutePath}\"")
-            appendLine("export HOME=\"${termuxHome.absolutePath}\"")
-            appendLine("export TMPDIR=\"${termuxTmp.absolutePath}\"")
-            appendLine("export PATH=\"${termuxBin.absolutePath}:/system/bin\"")
-            appendLine("export LD_LIBRARY_PATH=\"${termuxLib.absolutePath}\${'$'}{LD_LIBRARY_PATH:+:\${LD_LIBRARY_PATH}}\"")
-            appendLine("export LANG=\"C.UTF-8\"")
-            appendLine("export LC_ALL=\"C.UTF-8\"")
-            appendLine("export TERM=\"xterm-256color\"")
-            appendLine("export COLORTERM=\"truecolor\"")
-            appendLine("export ANDROID_STORAGE=\"/sdcard\"")
-            appendLine("TERMUX_UID=\$(id -u 2>/dev/null || true)")
-            appendLine("if [ -n \"\${TERMUX_UID}\" ]; then")
-            appendLine("  export TERMUX__UID=\"\${TERMUX_UID}\"")
-            appendLine("  export TERMUX__USER_ID=\"\${TERMUX_UID}\"")
+            appendLine("PROOT_BIN=\"${runtimeProot.absolutePath}\"")
+            appendLine("APP_FILES=\"${context.filesDir.absolutePath}\"")
+            appendLine("APP_CACHE=\"${context.cacheDir.absolutePath}\"")
+            appendLine("HOST_PREFIX=\"${termuxPrefix.absolutePath}\"")
+            appendLine("HOST_HOME=\"${termuxHome.absolutePath}\"")
+            appendLine("HOST_TMP=\"${termuxTmp.absolutePath}\"")
+            appendLine("LEGACY_FILES=\"$LEGACY_TERMUX_FILES\"")
+            appendLine("LEGACY_CACHE=\"$LEGACY_TERMUX_CACHE\"")
+            appendLine("LEGACY_PREFIX=\"$LEGACY_TERMUX_PREFIX\"")
+            appendLine("LEGACY_HOME=\"$LEGACY_TERMUX_HOME\"")
+            appendLine("LEGACY_TMP=\"$LEGACY_TERMUX_TMP\"")
+            appendLine("mkdir -p \"${termuxCompatCache.absolutePath}\" \"${termuxHome.absolutePath}\" \"${termuxTmp.absolutePath}\" 2>/dev/null")
+            appendLine("export PROOT_TMP_DIR=\"${termuxCompatCache.absolutePath}\"")
+            appendLine("export PROOT_NO_SECCOMP=1")
+            appendLine("if [ ! -x \"\${PROOT_BIN}\" ]; then")
+            appendLine("  echo \"DevPocket error: missing bundled compatibility proot at \${PROOT_BIN}\" >&2")
+            appendLine("  exit 127")
             appendLine("fi")
-            appendLine("mkdir -p \"${termuxHome.absolutePath}\" \"${termuxTmp.absolutePath}\" \"${termuxCompatCache.absolutePath}\" 2>/dev/null")
-            appendLine("exec \"\$@\"")
+            appendLine("export TERMUX_UID=\$(id -u 2>/dev/null || true)")
+            appendLine("echo \"DevPocket: host Termux compatibility mode (launcher=\${PROOT_BIN} host-prefix=\${HOST_PREFIX} legacy-prefix=\${LEGACY_PREFIX} cmd=\$*)\" >&2")
+            appendLine("exec \"\${PROOT_BIN}\" --kill-on-exit --link2symlink -0 -r / \\")
+            appendLine("  -b /system -b /apex -b /dev -b /proc -b /sys -b /sdcard -b /storage \\")
+            appendLine("  -b \"${context.filesDir.absolutePath}:${context.filesDir.absolutePath}\" \\")
+            appendLine("  -b \"${context.cacheDir.absolutePath}:${context.cacheDir.absolutePath}\" \\")
+            appendLine("  -b \"${context.filesDir.absolutePath}:\${LEGACY_FILES}\" \\")
+            appendLine("  -b \"${context.cacheDir.absolutePath}:\${LEGACY_CACHE}\" \\")
+            appendLine("  -w / \\")
+            appendLine("  /system/bin/sh -c '")
+            appendLine("    export PREFIX=\"\${LEGACY_PREFIX}\"")
+            appendLine("    export HOME=\"\${LEGACY_HOME}\"")
+            appendLine("    export TMPDIR=\"\${LEGACY_TMP}\"")
+            appendLine("    export PATH=\"\${LEGACY_PREFIX}/bin:\${HOST_PREFIX}/bin:/system/bin\"")
+            appendLine("    export LD_LIBRARY_PATH=\"\${LEGACY_PREFIX}/lib:\${HOST_PREFIX}/lib\"")
+            appendLine("    export LANG=C.UTF-8 LC_ALL=C.UTF-8 TERM=xterm-256color COLORTERM=truecolor ANDROID_STORAGE=/sdcard")
+            appendLine("    if [ -f \"\${LEGACY_PREFIX}/etc/tls/cert.pem\" ]; then")
+            appendLine("      export SSL_CERT_FILE=\"\${LEGACY_PREFIX}/etc/tls/cert.pem\"")
+            appendLine("      export GIT_SSL_CAINFO=\"\${LEGACY_PREFIX}/etc/tls/cert.pem\"")
+            appendLine("      export CURL_CA_BUNDLE=\"\${LEGACY_PREFIX}/etc/tls/cert.pem\"")
+            appendLine("      export NODE_EXTRA_CA_CERTS=\"\${LEGACY_PREFIX}/etc/tls/cert.pem\"")
+            appendLine("    fi")
+            appendLine("    if [ -n \"\${TERMUX_UID}\" ]; then")
+            appendLine("      export TERMUX__UID=\"\${TERMUX_UID}\"")
+            appendLine("      export TERMUX__USER_ID=\"\${TERMUX_UID}\"")
+            appendLine("    fi")
+            appendLine("    exec \"\$@\"")
+            appendLine("  ' _ \"\$@\"")
         }
         termuxCompatWrapper.writeText(compatWrapper)
         termuxCompatWrapper.setExecutable(true, false)
@@ -630,6 +721,7 @@ class BootstrapInstallerService(private val context: Context) {
             appendLine("PREFIX=\"${termuxPrefix.absolutePath}\"")
             appendLine("TERMUX_ENV=\"${termuxEnvWrapper.absolutePath}\"")
             appendLine("TERMUX_COMPAT=\"${termuxCompatWrapper.absolutePath}\"")
+            appendLine("LEGACY_PROOT_DISTRO=\"$LEGACY_TERMUX_PREFIX/bin/proot-distro\"")
             appendLine("DEBIAN_ROOT=\"${debianRoot.absolutePath}\"")
             appendLine("RUNTIME_ROOT=\"${TheiaRuntimePaths.runtimeRoot(context).absolutePath}\"")
             appendLine("CONFIG_DIR=\"${TheiaRuntimePaths.configDir(context).absolutePath}\"")
@@ -656,8 +748,13 @@ class BootstrapInstallerService(private val context: Context) {
             appendLine("if [ \"\$#\" -eq 0 ]; then")
             appendLine("  set -- --login")
             appendLine("fi")
+            appendLine("PROOT_GETCWD_SHIM=\"/opt/devpocket/bin/proot-getcwd.so\"")
+            appendLine("PROOT_GETCWD_PRELOAD=\"\"")
+            appendLine("if [ -f \"\${PROOT_GETCWD_SHIM}\" ]; then")
+            appendLine("  PROOT_GETCWD_PRELOAD=\"\${PROOT_GETCWD_SHIM}\"")
+            appendLine("fi")
             appendLine("echo \"DevPocket: entering Debian via proot-distro (host-pwd=\${HOST_PWD} guest-pwd=\${GUEST_WD})\" >&2")
-            appendLine("exec \"${termuxCompatWrapper.absolutePath}\" \"${termuxBin.absolutePath}/proot-distro\" login --shared-tmp \\")
+            appendLine("exec \"${termuxCompatWrapper.absolutePath}\" \"\${LEGACY_PROOT_DISTRO}\" login --shared-tmp \\")
             appendLine("  --bind /sdcard:/sdcard \\")
             appendLine("  --bind /storage:/storage \\")
             appendLine("  --bind \"\${RUNTIME_ROOT}:/opt/devpocket\" \\")
@@ -665,7 +762,7 @@ class BootstrapInstallerService(private val context: Context) {
             appendLine("  --bind \"\${EXTENSIONS_DIR}:/opt/devpocket-extensions\" \\")
             appendLine("  --work-dir \"\${GUEST_WD}\" ${DEBIAN_ALIAS} -- /usr/bin/env \\")
             appendLine("  HOME=/root USER=root LOGNAME=root TERM=xterm-256color COLORTERM=truecolor LANG=C.UTF-8 LC_ALL=C.UTF-8 ANDROID_STORAGE=/sdcard \\")
-            appendLine("  SSL_CERT_FILE=/opt/devpocket/etc/ca-certificates/cacert.pem GIT_SSL_CAINFO=/opt/devpocket/etc/ca-certificates/cacert.pem CURL_CA_BUNDLE=/opt/devpocket/etc/ca-certificates/cacert.pem NODE_EXTRA_CA_CERTS=/opt/devpocket/etc/ca-certificates/cacert.pem \\")
+            appendLine("  SSL_CERT_FILE=/opt/devpocket/etc/ca-certificates/cacert.pem GIT_SSL_CAINFO=/opt/devpocket/etc/ca-certificates/cacert.pem CURL_CA_BUNDLE=/opt/devpocket/etc/ca-certificates/cacert.pem NODE_EXTRA_CA_CERTS=/opt/devpocket/etc/ca-certificates/cacert.pem LD_PRELOAD=\${PROOT_GETCWD_PRELOAD} \\")
             appendLine("  /bin/bash \"\${@}\"")
         }
         termuxShellWrapper.writeText(shellWrapper)
@@ -674,10 +771,31 @@ class BootstrapInstallerService(private val context: Context) {
     }
 
     private fun termuxDpkgEnv(): Map<String, String> = mapOf(
-        "DPKG_ROOT" to termuxPrefix.absolutePath,
-        "DPKG_ADMINDIR" to File(termuxPrefix, "var/lib/dpkg").absolutePath,
+        "DPKG_ROOT" to LEGACY_TERMUX_PREFIX,
+        "DPKG_ADMINDIR" to "$LEGACY_TERMUX_PREFIX/var/lib/dpkg",
         "DPKG_FORCE" to "script-chrootless"
     )
+
+    private fun toCompatGuestPath(value: String): String {
+        return when {
+            value == termuxPrefix.absolutePath -> LEGACY_TERMUX_PREFIX
+            value.startsWith(termuxPrefix.absolutePath + "/") ->
+                "$LEGACY_TERMUX_PREFIX/" + value.removePrefix(termuxPrefix.absolutePath + "/")
+            value == termuxHome.absolutePath -> LEGACY_TERMUX_HOME
+            value.startsWith(termuxHome.absolutePath + "/") ->
+                "$LEGACY_TERMUX_HOME/" + value.removePrefix(termuxHome.absolutePath + "/")
+            value == termuxTmp.absolutePath -> LEGACY_TERMUX_TMP
+            value.startsWith(termuxTmp.absolutePath + "/") ->
+                "$LEGACY_TERMUX_TMP/" + value.removePrefix(termuxTmp.absolutePath + "/")
+            value == context.filesDir.absolutePath -> LEGACY_TERMUX_FILES
+            value.startsWith(context.filesDir.absolutePath + "/") ->
+                "$LEGACY_TERMUX_FILES/" + value.removePrefix(context.filesDir.absolutePath + "/")
+            value == context.cacheDir.absolutePath -> LEGACY_TERMUX_CACHE
+            value.startsWith(context.cacheDir.absolutePath + "/") ->
+                "$LEGACY_TERMUX_CACHE/" + value.removePrefix(context.cacheDir.absolutePath + "/")
+            else -> value
+        }
+    }
 
     private fun runTermuxCompatShellCommand(
         command: String,
@@ -692,12 +810,7 @@ class BootstrapInstallerService(private val context: Context) {
         phase: String,
         extraEnv: Map<String, String> = emptyMap()
     ) {
-        val dpkgEnv = mapOf(
-            "DPKG_ROOT" to termuxPrefix.absolutePath,
-            "DPKG_ADMINDIR" to File(termuxPrefix, "var/lib/dpkg").absolutePath,
-            "DPKG_FORCE" to "script-chrootless"
-        )
-        runTermuxCommand(command, phase, extraEnv + dpkgEnv, termuxEnvWrapper)
+        runTermuxCommand(command.map(::toCompatGuestPath), phase, extraEnv + termuxDpkgEnv(), termuxCompatWrapper)
     }
 
     private fun runTermuxShellCommand(
