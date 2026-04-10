@@ -40,9 +40,10 @@ console.log('[android-lite][plugin-host] runtime diagnostics', {
 });
 
 function resolveShellFallback(): string {
+    const termuxPrefix = process.env.DEVPOCKET_TERMUX_PREFIX;
     return process.env.THEIA_SHELL
         || process.env.SHELL
-        || '/data/data/com.termux/files/usr/bin/bash';
+        || (termuxPrefix ? `${termuxPrefix}/bin/devpocket-shell` : '/missing/devpocket-shell');
 }
 
 function sanitizeShellPath(shell: string): string {
@@ -97,14 +98,14 @@ function patchSpawnOptions(options: cp.SpawnOptions = {}): cp.SpawnOptions {
     if (typeof resolved.shell === 'string') {
         resolved.shell = sanitizeShellPath(resolved.shell);
     } else if (resolved.shell === true) {
-        resolved.shell = process.env.SHELL ?? '/system/bin/sh';
+        resolved.shell = process.env.THEIA_SHELL ?? process.env.SHELL ?? resolveShellFallback();
     }
     const env = {
         ...process.env,
         ...(resolved.env ?? {})
     };
     if (!env.SHELL) {
-        env.SHELL = process.env.SHELL ?? '/system/bin/sh';
+        env.SHELL = process.env.THEIA_SHELL ?? process.env.SHELL ?? resolveShellFallback();
     }
     if (!env.THEIA_SHELL) {
         env.THEIA_SHELL = env.SHELL;
@@ -115,7 +116,6 @@ function patchSpawnOptions(options: cp.SpawnOptions = {}): cp.SpawnOptions {
     if (!env.npm_config_script_shell) {
         env.npm_config_script_shell = env.SHELL;
     }
-    // Help extensions detect terminal capabilities on Android pipe-based terminals
     if (!env.TERM) {
         env.TERM = 'xterm-256color';
     }
@@ -137,14 +137,14 @@ function patchSpawnSyncOptions(options: cp.SpawnSyncOptions = {}): cp.SpawnSyncO
     if (typeof resolved.shell === 'string') {
         resolved.shell = sanitizeShellPath(resolved.shell);
     } else if (resolved.shell === true) {
-        resolved.shell = process.env.SHELL ?? '/system/bin/sh';
+        resolved.shell = process.env.THEIA_SHELL ?? process.env.SHELL ?? resolveShellFallback();
     }
     const env = {
         ...process.env,
         ...(resolved.env ?? {})
     };
     if (!env.SHELL) {
-        env.SHELL = process.env.SHELL ?? '/system/bin/sh';
+        env.SHELL = process.env.THEIA_SHELL ?? process.env.SHELL ?? resolveShellFallback();
     }
     if (!env.THEIA_SHELL) {
         env.THEIA_SHELL = env.SHELL;

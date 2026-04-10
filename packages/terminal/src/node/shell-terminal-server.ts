@@ -65,8 +65,11 @@ export class ShellTerminalServer extends BaseTerminalServer implements IShellTer
                 // These are set by TheiaBackendService.kt and allow terminal to detect Debian
                 if (process.env.DEVPOCKET_DEBIAN_ROOT) {
                     options.env.DEVPOCKET_DEBIAN_ROOT = process.env.DEVPOCKET_DEBIAN_ROOT;
-                    options.env.DEVPOCKET_USER = process.env.DEVPOCKET_USER || 'devpocket';
-                    options.env.DEVPOCKET_WORKSPACE = process.env.DEVPOCKET_WORKSPACE || '/home/devpocket/code';
+                    options.env.DEVPOCKET_USER = process.env.DEVPOCKET_USER || 'root';
+                    options.env.DEVPOCKET_WORKSPACE = process.env.DEVPOCKET_WORKSPACE || '/root';
+                    if (process.env.DEVPOCKET_TERMUX_PREFIX) {
+                        options.env.DEVPOCKET_TERMUX_PREFIX = process.env.DEVPOCKET_TERMUX_PREFIX;
+                    }
 
                     // Terminal capabilities for Debian sessions
                     options.env.TERM = 'xterm-256color';

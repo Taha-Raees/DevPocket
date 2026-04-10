@@ -29,7 +29,7 @@ object UserAccountConfig {
             username.length < 3 -> "Username must be at least 3 characters"
             username.length > 32 -> "Username must be at most 32 characters"
             !isValidUsername(username) -> "Username can only contain lowercase letters, numbers, hyphen, and underscore"
-            username in listOf("root", "bin", "sys", "sync", "games", "man", "nobody", "ubuntu", "debian") -> 
+            username in listOf("bin", "sys", "sync", "games", "man", "nobody", "ubuntu", "debian") ->
                 "Username is reserved"
             else -> null
         }

@@ -28,8 +28,8 @@ This project has a comprehensive memory system at `.claude/projects/-home-...-De
 - Min SDK: 24, Target SDK: 36
 - Architecture: Monorepo with Lerna (58 Theia extension packages)
 - Frontend: React 18.2 + TypeScript + Lumino widgets
-- Backend: Node.js (ARM64 binary bundled in APK)
-- Terminal: **Real PTY via node-pty (2026-03-30)** with pipe fallback safety
+- Backend: Node.js installed into an embedded Termux prefix on first launch
+- Terminal: Debian launched through official `proot-distro` via a thin app shell wrapper
 
 ---
 
@@ -61,6 +61,139 @@ This project has a comprehensive memory system at `.claude/projects/-home-...-De
 
 ---
 
+## Recent Changes (2026-04-05)
+
+### ✅ CHANGED: Embedded Termux + Official proot-distro Flow
+
+**Runtime model now:**
+- `BootstrapInstallerService.kt` now downloads the official Termux bootstrap, extracts it into `files/usr`, patches text scripts to the app prefix, runs Termux bootstrap second-stage, updates package metadata, installs `proot proot-distro nodejs`, and then installs Debian with official `proot-distro`
+- `TheiaBackendService.kt` now runs the backend with Node.js from the embedded Termux prefix
+- Debian is used for terminal sessions through `devpocket-shell`, which now delegates to `proot-distro login debian`
+- Backend startup no longer passes a default workspace argument, so the IDE does not auto-open `/root` or `/home/<user>/code`
+- Because upstream Termux binaries still hardcode `com.termux` paths, bootstrap/package-management and Debian login now go through a thin compatibility launcher backed by the prebundled runtime `proot`, binding the app sandbox to `/data/data/com.termux/files`
+
+**Onboarding changes:**
+- `OnboardingActivity.kt` is now a single automatic preparation screen
+- The runtime seeds the internal account state as `root` to match default `proot-distro` behavior
+- The screen loads `logo2.svg` from Android assets and shows install/backend progress on one page
+- After bootstrap, package install, and Debian install complete, onboarding waits for backend HTTP readiness and then opens the IDE
+
+**Shell behavior changes:**
+- `devpocket-shell` no longer falls back to Android `/system/bin/sh`; missing embedded Termux / `proot-distro` now fails loudly
+- `shell-process.ts`, plugin-host, and Android polyfills now prefer the Termux prefix wrapper path directly when Debian mode is configured
+- Debian root gets shortcuts to Android shared storage such as `~/storage`, `~/Download`, and `~/Documents`
+
+**Important architecture note:**
+- The app no longer manages a custom Debian rootfs installer
+- The remaining custom wrapper layer is intentionally thin: one Termux env wrapper and one Debian shell wrapper around official `proot-distro`
+
+**Installer stability note:**
+- First-boot host setup now runs the Termux bootstrap second-stage explicitly after extraction
+- First-boot package setup uses `pkg update` before `pkg install proot proot-distro nodejs`; it no longer runs `pkg upgrade` during onboarding
+- Installer failures now preserve the last captured command output so the loading screen shows the real failing lines instead of only an exit code
+- The compatibility launcher is again a real outer `proot` root that binds the app sandbox to `/data/data/com.termux/files` for stock Termux binaries while the backend remains outside Debian
+- Termux package-manager state (`dpkg`, `apt`) is pre-created under the embedded prefix before bootstrap second-stage runs
+
+---
+
+## Recent Changes (2026-04-04, late)
+
+### ✅ CHANGED: Theia Backend Now Prefers Debian Runtime
+
+**What changed:**
+- `TheiaBackendService.kt` now prefers launching the Node backend inside Debian through `bin/devpocket-shell`
+- `BootstrapInstallerService.kt` rewrites the Debian wrapper with bind mounts for:
+  - `/opt/devpocket` → bundled runtime
+  - `/opt/devpocket-config` → Theia config dir
+  - `/opt/devpocket-extensions` → extracted extension dir
+- `TheiaRuntimePaths.kt` now exposes Debian guest paths for backend entrypoint, runtime bin/lib, config, extensions, and workspace
+- Terminal/task/plugin-host paths strip host `LD_LIBRARY_PATH` when the backend is already inside Debian so spawned Debian tools do not inherit Android runtime linker settings
+
+**Important runtime truth now:**
+- Preferred mode: backend inside Debian
+- Fallback mode: host backend only when Debian is unavailable or validation fails
+- Shells, tasks, and command-console jobs should now resolve to Debian `/bin/bash` when backend migration is active
+
+---
+
+## Recent Changes (2026-04-04)
+
+### ✅ FIXED: Debian Environment Critical Issues
+
+**Problem:** Debian 11 (bullseye) rootfs was configured with Debian 12 (bookworm) repositories, causing ALL apt operations to fail with dependency conflicts. Additionally, the terminal PATH was missing runtime binaries and proot-getcwd.so was not properly bundled.
+
+**Fixes Applied:**
+
+1. **Debian version mismatch fixed** - Changed `bookworm` → `bullseye` in `sources.list` generation:
+   - [`BootstrapInstallerService.kt:493-495`](android-app/android/app/src/main/java/com/theia/mobile/BootstrapInstallerService.kt) - Installation-time sources.list
+   - [`BootstrapInstallerService.kt:569-571`](android-app/android/app/src/main/java/com/theia/mobile/BootstrapInstallerService.kt) - Setup keys script
+   - [`BootstrapInstallerService.kt:832-834`](android-app/android/app/src/main/java/com/theia/mobile/BootstrapInstallerService.kt) - Shell wrapper sources.list
+
+2. **Runtime PATH fixed** - Added `${DEVPOCKET_RUNTIME_BIN}` to PATH in devpocket-shell wrapper:
+   - [`BootstrapInstallerService.kt:730`](android-app/android/app/src/main/java/com/theia/mobile/BootstrapInstallerService.kt) - Shell export PATH
+   - [`BootstrapInstallerService.kt:944`](android-app/android/app/src/main/java/com/theia/mobile/BootstrapInstallerService.kt) - proot env PATH
+
+3. **proot-getcwd.so already bundled** - Confirmed shim exists at [`products/theia-android-lite/proot-shims/proot-getcwd.so`](products/theia-android-lite/proot-shims/proot-getcwd.so) and is copied by build script
+
+**Impact:**
+- `apt-get update` will now succeed (matching bullseye repositories)
+- `apt-get install git` will work after update
+- node/npm binaries now in PATH inside Debian shell
+- dpkg operations should work with proot-getcwd.so LD_PRELOAD
+
+### ✅ ADDED: GitHub Actions CI/CD Pipeline
+
+**New file:** [`.github/workflows/build-and-release.yml`](.github/workflows/build-and-release.yml)
+
+**Features:**
+- Automatic APK build on push to main/master/dev branches
+- Full build pipeline: npm install → TypeScript build → webpack bundle → runtime assets → Gradle APK
+- Downloads proot binary from upstream during build
+- Creates GitHub Release with APK attachment on main/master pushes
+- Manual trigger support via workflow_dispatch
+- 45-minute timeout, artifact retention for 30 days
+
+---
+
+## Recent Changes (2026-04-04)
+
+### ✅ FIXED: Debian Environment Critical Issues
+
+**Problem:** Debian 11 (bullseye) rootfs was configured with Debian 12 (bookworm) repositories, causing ALL apt operations to fail with dependency conflicts. Additionally, the terminal PATH was missing runtime binaries and proot-getcwd.so was not properly bundled.
+
+**Fixes Applied:**
+
+1. **Debian version mismatch fixed** - Changed `bookworm` → `bullseye` in `sources.list` generation:
+   - [`BootstrapInstallerService.kt:493-495`](android-app/android/app/src/main/java/com/theia/mobile/BootstrapInstallerService.kt) - Installation-time sources.list
+   - [`BootstrapInstallerService.kt:569-571`](android-app/android/app/src/main/java/com/theia/mobile/BootstrapInstallerService.kt) - Setup keys script
+   - [`BootstrapInstallerService.kt:832-834`](android-app/android/app/src/main/java/com/theia/mobile/BootstrapInstallerService.kt) - Shell wrapper sources.list
+
+2. **Runtime PATH fixed** - Added `${DEVPOCKET_RUNTIME_BIN}` to PATH in devpocket-shell wrapper:
+   - [`BootstrapInstallerService.kt:730`](android-app/android/app/src/main/java/com/theia/mobile/BootstrapInstallerService.kt) - Shell export PATH
+   - [`BootstrapInstallerService.kt:944`](android-app/android/app/src/main/java/com/theia/mobile/BootstrapInstallerService.kt) - proot env PATH
+
+3. **proot-getcwd.so already bundled** - Confirmed shim exists at [`products/theia-android-lite/proot-shims/proot-getcwd.so`](products/theia-android-lite/proot-shims/proot-getcwd.so) and is copied by build script
+
+**Impact:**
+- `apt-get update` will now succeed (matching bullseye repositories)
+- `apt-get install git` will work after update
+- node/npm binaries now in PATH inside Debian shell
+- dpkg operations should work with proot-getcwd.so LD_PRELOAD
+
+### ✅ ADDED: GitHub Actions CI/CD Pipeline
+
+**New file:** [`.github/workflows/build-and-release.yml`](.github/workflows/build-and-release.yml)
+
+**Features:**
+- Automatic APK build on push to main/master/dev branches
+- Full build pipeline: npm install → TypeScript build → webpack bundle → runtime assets → Gradle APK
+- Downloads proot binary from upstream during build
+- Creates GitHub Release with APK attachment on main/master pushes
+- Manual trigger support via workflow_dispatch
+- 45-minute timeout, artifact retention for 30 days
+
+---
+
 ## Recent Changes (2026-03-31)
 
 ### ⚠️ IN PROGRESS: Debian-First Terminal Onboarding
@@ -70,7 +203,7 @@ This project has a comprehensive memory system at `.claude/projects/-home-...-De
 - Runtime asset assembly now bundles `proot` in [`products/theia-android-lite/scripts/build-runtime-assets.mjs`](products/theia-android-lite/scripts/build-runtime-assets.mjs)
 - Android installer path now downloads a Debian-root userland archive, verifies checksum, extracts it, creates a Linux user, and writes a wrapper in [`android-app/android/app/src/main/java/com/theia/mobile/BootstrapInstallerService.kt`](android-app/android/app/src/main/java/com/theia/mobile/BootstrapInstallerService.kt)
 - Terminal corruption from injected `stty cols ... rows ...` in the Android pipe fallback was removed in [`packages/process/src/node/terminal-process.ts`](packages/process/src/node/terminal-process.ts)
-- Current blocker: **true Debian shell launch is still not reliable** under the present `proot` + rootfs combination, so the wrapper currently falls back to Android `/system/bin/sh`
+- Historical blocker at that time: Debian shell launch was still unreliable under the old custom `proot` + rootfs path. This was replaced later by the embedded Termux + official `proot-distro` flow.
 
 **New Android/Kotlin files introduced:**
 - `android-app/android/app/src/main/java/com/theia/mobile/OnboardingActivity.kt`

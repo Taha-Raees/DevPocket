@@ -5,7 +5,7 @@
 // terms of the Eclipse Public License v. 2.0 which is available at
 // http://www.eclipse.org/legal/epl-2.0.
 //
-// This Source Code may also be made available under the following Secondary
+// This Source Code may be made available under the following Secondary
 // Licenses when the conditions for such availability set forth in the Eclipse
 // Public License v. 2.0 are satisfied: GNU General Public License, version 2
 // with the GNU Classpath Exception which is available at
@@ -54,7 +54,7 @@ export class ShellProcess extends TerminalProcess {
     protected static defaultCols = 80;
     protected static defaultRows = 24;
 
-    constructor( // eslint-disable-next-line @typescript-eslint/indent
+    constructor(
         @inject(ShellProcessOptions) options: ShellProcessOptions,
         @inject(ProcessManager) processManager: ProcessManager,
         @inject(MultiRingBuffer) ringBuffer: MultiRingBuffer,
@@ -62,26 +62,35 @@ export class ShellProcess extends TerminalProcess {
         @inject(EnvironmentUtils) environmentUtils: EnvironmentUtils,
     ) {
         const env = { 'COLORTERM': 'truecolor' };
-        // When proot is active the node-pty cwd must be a real Android-side path that
-        // exists before exec. Use the Debian home dir (which lives on Android's filesystem
-        // under debianRoot/home/<user>) so node-pty can always chdir successfully.
-        // proot's own -w flag then sets the working directory *inside* the guest.
         const cwd = (() => {
+            const path = require('path') as typeof import('path');
+            const fs = require('fs') as typeof import('fs');
+            const requestedRoot = getRootPath(options.rootURI);
+            if (requestedRoot && fs.existsSync(requestedRoot)) {
+                return requestedRoot;
+            }
+
+            const debianWorkspace = process.env.DEVPOCKET_WORKSPACE;
+            if (debianWorkspace && fs.existsSync(debianWorkspace)) {
+                return debianWorkspace;
+            }
+
             const debianRoot = process.env.DEVPOCKET_DEBIAN_ROOT;
             const debianUser = process.env.DEVPOCKET_USER;
             if (debianRoot && debianUser) {
-                const path = require('path') as typeof import('path');
-                const fs = require('fs') as typeof import('fs');
                 const debianHome = path.join(debianRoot, 'home', debianUser);
+                const rootHome = path.join(debianRoot, 'root');
+                if (debianUser === 'root' && fs.existsSync(rootHome)) {
+                    return rootHome;
+                }
                 if (fs.existsSync(debianHome)) {
                     return debianHome;
                 }
-                // Fallback: debianRoot itself always exists if onboarding completed
                 if (fs.existsSync(debianRoot)) {
                     return debianRoot;
                 }
             }
-            return getRootPath(options.rootURI);
+            return requestedRoot;
         })();
         super(<TerminalProcessOptions>{
             command: options.shell || ShellProcess.getShellExecutablePath(),
@@ -103,20 +112,13 @@ export class ShellProcess extends TerminalProcess {
             return shell;
         }
 
-        // Android/Debian Detection: Use wrapper script if Debian runtime is available
         if (process.env.DEVPOCKET_DEBIAN_ROOT) {
             const path = require('path');
-            const debianBin = path.join(process.env.DEVPOCKET_DEBIAN_ROOT, 'bin', 'devpocket-shell');
-            try {
-                // Check if wrapper exists and is executable
-                const fs = require('fs');
-                const stats = fs.statSync(debianBin);
-                if (stats.isFile() && (stats.mode & 0o100)) {
-                    return debianBin;
-                }
-            } catch (e) {
-                // Fallback if wrapper not found
+            const termuxPrefix = process.env.DEVPOCKET_TERMUX_PREFIX;
+            if (termuxPrefix) {
+                return path.join(termuxPrefix, 'bin', 'devpocket-shell');
             }
+            return process.env.THEIA_SHELL || '/missing/devpocket-shell';
         }
 
         if (isWindows) {
@@ -132,7 +134,6 @@ export class ShellProcess extends TerminalProcess {
             return parseArgs(args);
         }
 
-        // Android/Debian: No special args needed for wrapper script
         if (process.env.DEVPOCKET_DEBIAN_ROOT) {
             return [];
         }

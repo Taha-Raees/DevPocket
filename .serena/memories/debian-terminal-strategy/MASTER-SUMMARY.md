@@ -110,6 +110,23 @@ This document captures the complete 15-phase plan to transform DevPocket from an
 - Phase 14: Comprehensive testing
 - Phase 15: Rollout and deprecation strategy
 
+**2026-04-04 update:**
+- `TheiaBackendService.kt` now prefers launching the backend inside Debian through `bin/devpocket-shell`
+- `BootstrapInstallerService.kt` bind-mounts the runtime into Debian at `/opt/devpocket` plus dedicated config/extensions mounts
+- TypeScript shell/task/plugin-host code now strips host `LD_LIBRARY_PATH` for Debian-spawned user processes to avoid leaking Android linker settings into Debian tools
+
+**2026-04-05 update:**
+- Backend launch reverted to the host runtime; Debian remains the terminal runtime through `devpocket-shell`
+- Onboarding is being simplified into a single automatic install/progress screen
+- Backend startup no longer passes `/home/<user>/code` as the default workspace argument
+- Android shell fallback is removed from `devpocket-shell`; missing Debian/proot now fails loudly
+- Debian homes now include shortcuts to Android shared storage (`~/storage`, `~/Download`, `~/Documents`, `~/Pictures`)
+- Runtime now downloads the official Termux bootstrap into `files/usr`, patches text scripts to the app prefix, installs `proot`, `proot-distro`, and `nodejs`, and provisions Debian with official `proot-distro`
+- `devpocket-shell` now lives in the Termux prefix and wraps `proot-distro login debian` with only the app-specific binds needed by the IDE
+- Installer now runs the Termux bootstrap second-stage explicitly and avoids `pkg upgrade` during first-run onboarding to reduce bootstrap failures
+- Upstream Termux binaries still hardcode `/data/data/com.termux/files/...`, so bootstrap/package-manager/debian-login commands now use an outer compatibility `proot` root that binds the app sandbox to those canonical paths
+- The installer now pre-creates `dpkg`/`apt` state under the embedded prefix before running bootstrap second-stage
+
 ---
 
 ## Key Files Created/Modified

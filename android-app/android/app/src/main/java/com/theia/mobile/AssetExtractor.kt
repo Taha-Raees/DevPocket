@@ -45,6 +45,8 @@ object AssetExtractor {
         mkdirs(TheiaRuntimePaths.workspacesRoot(context))
         mkdirs(TheiaRuntimePaths.extensionsRoot(context))
         mkdirs(TheiaRuntimePaths.configDir(context))
+        mkdirs(TheiaRuntimePaths.termuxHome(context))
+        mkdirs(TheiaRuntimePaths.termuxTmp(context))
     }
 
     private fun mkdirs(dir: File) {

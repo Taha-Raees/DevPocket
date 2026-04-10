@@ -195,12 +195,23 @@
    - `HealthCheckResult`: Tracks backend and Debian health separately
    - `performHealthCheck()`: Tests backend connectivity + Debian validation
 
-**Architecture Decision (LOCKED):**
-- **Option A (MVP - Selected):** Backend runs OUTSIDE Debian
-  - Simpler deployment, reuses existing Node.js binary
-  - Terminal sessions spawn inside Debian (via devpocket-shell)
-  - Can migrate to inside Debian later (Phase 8B) without breaking MVP
-- **Option B (Post-Stability):** Backend inside Debian (future consideration)
+**Architecture Update (2026-04-04):**
+- Preferred runtime now launches the backend inside Debian through `devpocket-shell`
+- Bundled runtime is bind-mounted into Debian at `/opt/devpocket`
+- Host runtime remains the fallback path if Debian validation fails
+- Terminal, shell-task, command-console, and plugin-host child process paths now clear host `LD_LIBRARY_PATH` when running Debian user commands
+
+**Architecture Update (2026-04-05):**
+- Backend launch has been moved back to the host runtime for faster startup and simpler health checks
+- Debian remains the terminal environment through `devpocket-shell`
+- First-run UX is being collapsed into one auto-install/progress screen instead of the multi-step account/setup wizard
+- The backend no longer opens `/home/<user>/code` by default on startup
+- Debian home now exposes Android shared storage shortcuts for Downloads/Documents/Pictures
+- Runtime now installs an embedded Termux bootstrap under `files/usr`, patches script prefixes to the app sandbox, installs `proot`, `proot-distro`, and `nodejs`, and uses official `proot-distro install debian`
+- The remaining custom shell logic is limited to an env wrapper and a thin `devpocket-shell` launcher around `proot-distro login debian`
+- First-run installer now executes the Termux bootstrap second-stage explicitly and uses `pkg update` without `pkg upgrade` before installing host packages
+- An outer compatibility `proot` root is now required for stock Termux binaries that still hardcode `/data/data/com.termux/files/...`
+- The installer now pre-creates `dpkg`/`apt` state in the embedded prefix before bootstrap second-stage and host package installation
 
 ---
 
@@ -483,4 +494,3 @@ This implementation represents a complete, production-ready architecture for tra
 **Time to Stable:** 10-11 weeks (Phase 13-15 rollout)  
 
 All 15 phases are now complete and documented. 🎯
-

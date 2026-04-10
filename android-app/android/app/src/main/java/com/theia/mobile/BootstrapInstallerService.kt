@@ -1,967 +1,1005 @@
 package com.theia.mobile
 
 import android.content.Context
+import android.os.Build
 import android.system.ErrnoException
 import android.system.Os
 import android.util.Log
-import org.apache.commons.compress.archivers.tar.TarArchiveEntry
-import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
-import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream
-import org.apache.commons.compress.compressors.xz.XZCompressorInputStream
+import java.io.BufferedReader
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.io.InputStreamReader
+import java.net.HttpURLConnection
+import java.net.URL
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
 import java.security.MessageDigest
+import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
 
 /**
- * Manages bootstrap runtime installation:
- * - Downloads Debian rootfs from remote source
- * - Verifies checksums
- * - Extracts to app-private Linux workspace
- * - Creates installation manifest
- * - Supports resume and cleanup
+ * Installs an embedded Termux host runtime and then uses official `proot-distro`
+ * to provision Debian. This replaces the old app-managed Debian rootfs flow.
  */
 class BootstrapInstallerService(private val context: Context) {
+
     companion object {
         private const val TAG = "BootstrapInstaller"
-        
-        // Debian rootfs metadata (update these as new versions are released)
-        const val ROOTFS_VERSION = "debian-userland-2026-03-31"
-        const val ROOTFS_FILENAME = "arm64-rootfs.tar.gz"
-        const val ROOTFS_SIZE_MB = 150
-        const val ROOTFS_URL = "https://github.com/CypherpunkArmory/UserLAnd-Assets-Debian/releases/download/v0.0.10/${ROOTFS_FILENAME}"
-        const val ROOTFS_SHA256_URL = "${ROOTFS_URL}.sha256"
-        const val ROOTFS_SHA256 = "47eb42fd93d27b4dd0520a1228c44431aa0cdff9a93ba624039147f984b79028"
-        
-        const val BOOTSTRAP_VERSION = "1.0.0"
+        private const val TERMUX_BOOTSTRAP_VERSION = "bootstrap-2026.04.05-r1+apt.android-7"
+        private const val BOOTSTRAP_VERSION = "2.0.0-termux"
+        private const val TERMUX_PACKAGES = "proot proot-distro nodejs"
+        private const val DEBIAN_ALIAS = "debian"
+        private const val ROOT_USERNAME = "root"
+        private const val TEXT_PATCH_LIMIT_BYTES = 5L * 1024L * 1024L
+        private const val LEGACY_TERMUX_FILES = "/data/data/com.termux/files"
+        private const val LEGACY_TERMUX_CACHE = "/data/data/com.termux/cache"
+        private const val LEGACY_TERMUX_PREFIX = "/data/data/com.termux/files/usr"
+        private const val LEGACY_TERMUX_HOME = "/data/data/com.termux/files/home"
+        private const val LEGACY_TERMUX_TMP = "/data/data/com.termux/files/usr/tmp"
+        private const val MAX_DIAGNOSTIC_LINES = 80
+
+        private data class BootstrapArchive(
+            val arch: String,
+            val url: String,
+            val sha256: String,
+            val expectedBytes: Long,
+        )
+
+        private val bootstrapArchives = mapOf(
+            "aarch64" to BootstrapArchive(
+                arch = "aarch64",
+                url = "https://github.com/termux/termux-packages/releases/download/bootstrap-2026.04.05-r1%2Bapt.android-7/bootstrap-aarch64.zip",
+                sha256 = "5a454825f1aa0c6946c30cac5672c7402a79f7ffbdf97e8faabe1eaefce59058",
+                expectedBytes = 30_763_662L,
+            ),
+            "arm" to BootstrapArchive(
+                arch = "arm",
+                url = "https://github.com/termux/termux-packages/releases/download/bootstrap-2026.04.05-r1%2Bapt.android-7/bootstrap-arm.zip",
+                sha256 = "7327a9540ff82216c6ad3cf4603c9c1edffdd3f9bd78b2d2cf237092993e93db",
+                expectedBytes = 27_655_674L,
+            ),
+            "x86_64" to BootstrapArchive(
+                arch = "x86_64",
+                url = "https://github.com/termux/termux-packages/releases/download/bootstrap-2026.04.05-r1%2Bapt.android-7/bootstrap-x86_64.zip",
+                sha256 = "514133fa6c17fdf27081373e3492f90fd7d41fdff39f707ffa1181b2c600fdb9",
+                expectedBytes = 30_610_083L,
+            ),
+        )
     }
 
     data class InstallProgress(
-        val phase: String,           // "downloading", "verifying", "extracting", "finalizing"
+        val phase: String,
         val currentBytes: Long,
         val totalBytes: Long,
-        val percentComplete: Int
+        val percentComplete: Int,
     )
 
     data class InstallManifest(
         val version: String = BOOTSTRAP_VERSION,
-        val rootfsVersion: String = ROOTFS_VERSION,
+        val bootstrapVersion: String = TERMUX_BOOTSTRAP_VERSION,
         val installedAt: Long = System.currentTimeMillis(),
-        val rootfsPath: String = "",
-        val checksum: String = "",
-        val extractedSuccessfully: Boolean = false
+        val prefixPath: String = "",
+        val debianPath: String = "",
+        val hostPackages: String = TERMUX_PACKAGES,
+        val extractedSuccessfully: Boolean = false,
     )
 
-    private val devpocketBase = File(context.filesDir, "linux")
-    private val bootstrapDir = File(devpocketBase, "bootstrap")
-    private val debianDir = File(devpocketBase, "debian")
-    private val tempDir = File(devpocketBase, "temp")
-    private val manifestFile = File(devpocketBase, "INSTALL_MANIFEST.json")
-    
+    private val linuxBase = File(context.filesDir, "linux")
+    private val tempDir = File(linuxBase, "temp")
+    private val manifestFile = File(linuxBase, "INSTALL_MANIFEST.json")
+
+    private val termuxPrefix = TheiaRuntimePaths.termuxPrefix(context)
+    private val termuxHome = TheiaRuntimePaths.termuxHome(context)
+    private val termuxTmp = TheiaRuntimePaths.termuxTmp(context)
+    private val termuxBin = TheiaRuntimePaths.termuxBin(context)
+    private val termuxLib = TheiaRuntimePaths.termuxLib(context)
+    private val termuxEnvWrapper = TheiaRuntimePaths.termuxEnvWrapper(context)
+    private val termuxCompatWrapper = TheiaRuntimePaths.termuxCompatWrapper(context)
+    private val termuxShellWrapper = TheiaRuntimePaths.termuxShellWrapper(context)
+    private val runtimeRoot = TheiaRuntimePaths.runtimeRoot(context)
+    private val runtimeProot = File(runtimeRoot, "bin/proot")
+    private val termuxCompatCache = File(context.cacheDir, "termux-compat")
+    private val debianRoot = TheiaRuntimePaths.getDebianRoot(context)
+
     private val stateManager = OnboardingStateManager(context)
     private var progressCallback: ((InstallProgress) -> Unit)? = null
+    private val recentCommandOutput = ArrayDeque<String>()
 
     fun setProgressCallback(callback: (InstallProgress) -> Unit) {
-        this.progressCallback = callback
+        progressCallback = callback
     }
 
-    /**
-     * Perform complete installation flow:
-     * 1. Verify preconditions
-     * 2. Download rootfs
-     * 3. Verify checksum
-     * 4. Extract
-     * 5. Create user account
-     * 6. Write manifest
-     */
     fun install(): Boolean {
         try {
-            Log.i(TAG, "Starting bootstrap installation")
+            Log.i(TAG, "Starting embedded Termux + proot-distro installation")
+            recentCommandOutput.clear()
             stateManager.setState(OnboardingStateManager.OnboardingState.ONBOARDING_INSTALLING)
+            seedDefaultAccountState()
+            AssetExtractor.ensureExtracted(context)
+            ensureBaseDirectories()
 
-            // Ensure directories exist
-            devpocketBase.mkdirs()
-            tempDir.mkdirs()
+            ensureBootstrapInstalled()
+            writeWrapperScripts()
+            ensureHostPackagesInstalled()
+            writeWrapperScripts()
+            ensureDebianInstalled()
+            finalizeDebianEnvironment()
 
-            // Phase 1: Download Debian rootfs
-            publishProgress("downloading", 0, ROOTFS_SIZE_MB.toLong() * 1024 * 1024)
-            if (!downloadRootfs()) {
-                stateManager.setState(OnboardingStateManager.OnboardingState.ONBOARDING_INSTALL_FAILED)
-                stateManager.setInstallError("Failed to download Debian rootfs")
-                Log.e(TAG, "Download failed")
-                return false
-            }
-
-            // Phase 2: Verify checksum
-            publishProgress("verifying", 0, ROOTFS_SIZE_MB.toLong() * 1024 * 1024)
-            val rootfsFile = File(tempDir, ROOTFS_FILENAME)
-            val checksumFile = downloadChecksumFile()
-            val verificationResult = SecurityManager.verifyRootfsSignature(rootfsFile, checksumFile)
-            if (!verificationResult.verified) {
-                stateManager.setState(OnboardingStateManager.OnboardingState.ONBOARDING_INSTALL_FAILED)
-                stateManager.setInstallError(verificationResult.errorMessage.ifBlank { "Checksum verification failed" })
-                Log.e(TAG, "Checksum mismatch")
-                rootfsFile.delete()
-                checksumFile.delete()
-                return false
-            }
-            val calculatedChecksum = verificationResult.checksum
-            Log.i(TAG, "Checksum verified: $calculatedChecksum")
-
-            // Phase 3: Extract rootfs
-            publishProgress("extracting", 0, ROOTFS_SIZE_MB.toLong() * 1024 * 1024)
-            debianDir.mkdirs()
-            if (!extractTarGz(rootfsFile, debianDir)) {
-                stateManager.setState(OnboardingStateManager.OnboardingState.ONBOARDING_INSTALL_FAILED)
-                stateManager.setInstallError("Failed to extract rootfs")
-                Log.e(TAG, "Extraction failed")
-                return false
-            }
-            Log.i(TAG, "Rootfs extracted successfully")
-
-            // Phase 4: Create user account (will be refined in Phase 6)
-            publishProgress("finalizing", 0, 100)
-            val config = stateManager.getConfig()
-            val username = config.username ?: "devpocket"
-            if (!createUserAccount(username)) {
-                Log.e(TAG, "Failed to create user account")
-                // Don't fail completely; account creation can be retried
-            }
-
-            // Phase 5: Write installation manifest
             val manifest = InstallManifest(
-                rootfsPath = debianDir.absolutePath,
-                checksum = calculatedChecksum,
-                extractedSuccessfully = true
+                prefixPath = termuxPrefix.absolutePath,
+                debianPath = debianRoot.absolutePath,
+                extractedSuccessfully = true,
             )
             writeManifest(manifest)
 
-            // Mark installation complete
-            stateManager.setRootfsVersion(ROOTFS_VERSION)
+            stateManager.setRootfsVersion(TERMUX_BOOTSTRAP_VERSION)
             stateManager.completeOnboarding()
             stateManager.setInstallProgress(100)
-
-            Log.i(TAG, "Bootstrap installation completed successfully")
+            Log.i(TAG, "Embedded Termux + Debian installation completed successfully")
             return true
-
         } catch (e: Exception) {
-            Log.e(TAG, "Installation error: ${e.message}", e)
+            Log.e(TAG, "Installation failed: ${e.message}", e)
             stateManager.setState(OnboardingStateManager.OnboardingState.ONBOARDING_INSTALL_FAILED)
-            stateManager.setInstallError("Installation error: ${e.message}")
+            stateManager.setInstallError(e.message ?: "Installation failed")
             return false
         }
     }
 
-    private fun downloadRootfs(): Boolean {
-        return try {
-            val rootfsFile = File(tempDir, ROOTFS_FILENAME)
-            
-            // If file already exists with reasonable size, skip download
-            if (rootfsFile.exists() && rootfsFile.length() > ROOTFS_SIZE_MB * 1024 * 1024 * 0.8) {
-                Log.i(TAG, "Rootfs file already exists with sufficient size, skipping download")
-                return true
-            }
-
-            Log.i(TAG, "Downloading rootfs from $ROOTFS_URL")
-            val url = java.net.URL(ROOTFS_URL)
-            val conn = url.openConnection() as java.net.HttpURLConnection
-            conn.requestMethod = "GET"
-            conn.connectTimeout = 30000
-            conn.readTimeout = 60000
-            conn.connect()
-            
-            if (conn.responseCode != java.net.HttpURLConnection.HTTP_OK) {
-                Log.e(TAG, "Download failed with response code: ${conn.responseCode}")
-                return false
-            }
-            
-            val totalBytes = conn.contentLength.toLong()
-            var downloadedBytes = 0L
-            
-            conn.inputStream.use { input ->
-                rootfsFile.outputStream().use { output ->
-                    val buffer = ByteArray(8192)
-                    var bytesRead: Int
-                    
-                    while (input.read(buffer).also { bytesRead = it } != -1) {
-                        output.write(buffer, 0, bytesRead)
-                        downloadedBytes += bytesRead
-                        
-                        // Publish progress
-                        val percent = if (totalBytes > 0) (downloadedBytes * 100 / totalBytes).toInt() else 0
-                        publishProgress("downloading", downloadedBytes, totalBytes)
-                    }
-                }
-            }
-            
-            Log.i(TAG, "Download complete: $downloadedBytes bytes")
-            true
-        } catch (e: Exception) {
-            Log.e(TAG, "Download failed: ${e.message}", e)
-            false
-        }
-    }
-
-    private fun downloadChecksumFile(): File {
-        val checksumFile = File(tempDir, "$ROOTFS_FILENAME.sha256")
-        if (ROOTFS_SHA256.isNotBlank()) {
-            checksumFile.writeText("$ROOTFS_SHA256  $ROOTFS_FILENAME\n")
-            return checksumFile
-        }
-
-        val connection = (java.net.URL(ROOTFS_SHA256_URL).openConnection() as java.net.HttpURLConnection).apply {
-            requestMethod = "GET"
-            connectTimeout = 15000
-            readTimeout = 15000
-        }
-
-        connection.connect()
-        if (connection.responseCode != java.net.HttpURLConnection.HTTP_OK) {
-            throw IllegalStateException("Failed to download checksum file: HTTP ${connection.responseCode}")
-        }
-
-        connection.inputStream.use { input ->
-            checksumFile.outputStream().use { output -> input.copyTo(output) }
-        }
-
-        return checksumFile
-    }
-
-    private fun calculateSHA256(file: File): String {
-        val messageDigest = MessageDigest.getInstance("SHA-256")
-        val buffer = ByteArray(8192)
-        var bytesRead: Int
-
-        FileInputStream(file).use { fis ->
-            while (fis.read(buffer).also { bytesRead = it } != -1) {
-                messageDigest.update(buffer, 0, bytesRead)
-            }
-        }
-
-        return messageDigest.digest().joinToString("") { "%02x".format(it) }
-    }
-
-    private fun extractTarGz(tarGzFile: File, destDir: File): Boolean {
-        return try {
-            Log.i(TAG, "Extracting ${tarGzFile.absolutePath} to ${destDir.absolutePath}")
-            
-            destDir.mkdirs()
-            
-            FileInputStream(tarGzFile).use { fileInput ->
-                val archiveInput = when {
-                    tarGzFile.name.endsWith(".tar.gz") || tarGzFile.name.endsWith(".tgz") -> {
-                        TarArchiveInputStream(GzipCompressorInputStream(fileInput))
-                    }
-                    tarGzFile.name.endsWith(".tar.xz") || tarGzFile.name.endsWith(".txz") -> {
-                        TarArchiveInputStream(XZCompressorInputStream(fileInput))
-                    }
-                    tarGzFile.name.endsWith(".tar") -> TarArchiveInputStream(fileInput)
-                    else -> throw IllegalArgumentException("Unsupported archive format: ${tarGzFile.name}")
-                }
-
-                archiveInput.use { tarInput ->
-                    var entry = tarInput.nextTarEntry
-                    while (entry != null) {
-                        writeTarEntry(destDir, tarInput, entry)
-                        entry = tarInput.nextTarEntry
-                    }
-                }
-            }
-            
-            // Verify extraction
-            if (!File(destDir, "bin").exists() || !File(destDir, "etc").exists()) {
-                Log.e(TAG, "Extraction verification failed: required directories missing")
-                return false
-            }
-            
-            // Copy shell wrapper into extracted Debian
-            try {
-                copyShellWrapperToDebianBin(destDir)
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to copy shell wrapper: ${e.message}")
-                // Don't fail completely; wrapper can be added later
-            }
-            
-            Log.i(TAG, "Extraction complete and verified")
-            true
-        } catch (e: Exception) {
-            Log.e(TAG, "Extraction failed: ${e.message}", e)
-            false
-        }
-    }
-
-    private fun writeTarEntry(destDir: File, tarInput: TarArchiveInputStream, entry: TarArchiveEntry) {
-        val sanitizedName = entry.name.removePrefix("./").removePrefix("/")
-        if (sanitizedName.isBlank()) {
-            return
-        }
-
-        val output = File(destDir, sanitizedName)
-        val canonicalDest = destDir.canonicalPath + File.separator
-        val canonicalOutput = output.canonicalPath
-        require(canonicalOutput.startsWith(canonicalDest)) { "Blocked path traversal for ${entry.name}" }
-
-        when {
-            entry.isDirectory -> output.mkdirs()
-            entry.isSymbolicLink -> {
-                output.parentFile?.mkdirs()
-                if (output.exists()) {
-                    output.delete()
-                }
-
-                try {
-                    Os.symlink(entry.linkName, output.absolutePath)
-                } catch (errno: ErrnoException) {
-                    throw IllegalStateException("Failed to create symlink ${entry.name} -> ${entry.linkName}: ${errno.message}", errno)
-                }
-            }
-            else -> {
-                output.parentFile?.mkdirs()
-                FileOutputStream(output).use { outputStream ->
-                    tarInput.copyTo(outputStream)
-                }
-                output.setReadable(true, false)
-                output.setWritable(true, true)
-                if ((entry.mode and 0b001_001_001) != 0) {
-                    output.setExecutable(true, false)
-                }
-            }
-        }
-    }
-
-    private fun createUserAccount(username: String): Boolean {
-        return try {
-            Log.i(TAG, "Creating Linux user account: $username")
-            
-            val config = stateManager.getConfig()
-            val sudoMode = config.sudoMode ?: "passwordless"
-            val sudoPassword = config.sudoPassword
-            
-            // 1. Create user home directory
-            val userHome = File(debianDir, "home/$username")
-            userHome.mkdirs()
-
-            // Pre-create essential system directories that apt/dpkg require.
-            // proot's mkdirat interception may not work on all Android kernel versions,
-            // so we create them on the host (Android) filesystem where debianDir lives.
-            listOf(
-                "tmp", "run",
-                "var/tmp", "var/run", "var/log/apt",
-                "var/lib/apt/lists/partial",
-                "var/lib/dpkg/info", "var/lib/dpkg/updates", "var/lib/dpkg/parts",
-                "var/cache/apt/archives/partial",
-                "var/cache/debconf"
-            ).forEach { dir ->
-                File(debianDir, dir).apply {
-                    mkdirs()
-                    setReadable(true, false)
-                    setWritable(true, false)
-                    setExecutable(true, false)
-                }
-            }
-            // Create empty dpkg lock files to prevent lock-acquisition errors inside proot
-            listOf(
-                "var/lib/dpkg/lock",
-                "var/lib/dpkg/lock-frontend",
-                "var/cache/apt/archives/lock",
-                "var/lib/apt/lists/lock"
-            ).forEach { lockPath ->
-                File(debianDir, lockPath).apply {
-                    parentFile?.mkdirs()
-                    if (!exists()) createNewFile()
-                }
-            }
-            // Initialize dpkg database files (apt refuses to run without these)
-            File(debianDir, "var/lib/dpkg/status").apply { parentFile?.mkdirs(); if (!exists()) createNewFile() }
-            File(debianDir, "var/lib/dpkg/available").apply { parentFile?.mkdirs(); if (!exists()) createNewFile() }
-
-            // 2. Initialize home for a real Linux user
-            // Write /etc/passwd entry
-            val etcDir = File(debianDir, "etc")
-            etcDir.mkdirs()
-            
-            val passwdEntry = "$username:x:1000:1000:DevPocket User:/home/$username:/bin/bash"
-            val passwdFile = File(etcDir, "passwd")
-            if (passwdFile.exists()) {
-                // Remove old entry if exists
-                val lines = passwdFile.readLines().filter { !it.startsWith("$username:") }
-                passwdFile.writeText((lines + passwdEntry).joinToString("\n") + "\n")
-            } else {
-                passwdFile.writeText(passwdEntry + "\n")
-            }
-            
-            // Write /etc/group entry
-            val groupEntry = "$username:x:1000:"
-            val groupFile = File(etcDir, "group")
-            if (groupFile.exists()) {
-                val lines = groupFile.readLines().filter { !it.startsWith("$username:") }
-                groupFile.writeText((lines + groupEntry).joinToString("\n") + "\n")
-            } else {
-                groupFile.writeText(groupEntry + "\n")
-            }
-
-            // Write /etc/hostname
-            File(etcDir, "hostname").writeText("devpocket\n")
-
-            // Write /etc/resolv.conf (Google + Cloudflare DNS as fallback;
-            // the shell wrapper copies Android's live resolv.conf on each launch)
-            val resolvConf = File(etcDir, "resolv.conf")
-            if (!resolvConf.exists()) {
-                resolvConf.writeText("nameserver 8.8.8.8\nnameserver 1.1.1.1\n")
-            }
-
-            // 3. Create shell configuration files
-            val bashrcContent = """
-                # .bashrc for DevPocket Debian environment
-                
-                # Colors
-                export LS_COLORS='di=34:ln=35:so=32:pi=33:ex=31:bd=46;34:cd=43;34:su=41;37:sg=46;37:tw=42;37:ow=43;37'
-                
-                # Aliases
-                alias ls='ls --color=auto'
-                alias ll='ls -la --color=auto'
-                alias grep='grep --color=auto'
-                alias rm='rm -i'
-                alias cp='cp -i'
-                alias mv='mv -i'
-                
-                # Prompt with username and path
-                export PS1='\[\033[01;32m\]\u@devpocket\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
-                
-                # History settings
-                export HISTCONTROL=ignoredups:ignorespace
-                export HISTSIZE=10000
-                export HISTFILESIZE=20000
-                
-                # Terminal
-                export TERM=xterm-256color
-                export COLORTERM=truecolor
-                export LC_ALL=C.UTF-8
-                export LANG=C.UTF-8
-            """.trimIndent()
-            
-            val bashrcFile = File(userHome, ".bashrc")
-            bashrcFile.writeText(bashrcContent)
-            bashrcFile.setReadable(true, true)
-            bashrcFile.setWritable(true, true)
-            
-            // Write .bash_profile
-            val bashProfileContent = """
-                # .bash_profile
-                if [ -f ~/.bashrc ]; then
-                    source ~/.bashrc
-                fi
-                export PATH="/home/$username/.local/bin:${'$'}PATH"
-            """.trimIndent()
-            
-            val profileFile = File(userHome, ".bash_profile")
-            profileFile.writeText(bashProfileContent)
-            profileFile.setReadable(true, true)
-            profileFile.setWritable(true, true)
-            
-            // 4. Create .ssh directory (for future SSH key support)
-            val sshDir = File(userHome, ".ssh")
-            sshDir.mkdirs()
-            sshDir.setReadable(true, true)
-            sshDir.setWritable(true, true)
-            sshDir.setExecutable(true, true)
-            
-            // 5. Write sudoers configuration
-            val sudoersDir = File(debianDir, "etc/sudoers.d")
-            sudoersDir.mkdirs()
-            
-            val sudoersContent = if (sudoMode == "passwordless") {
-                "# DevPocket passwordless sudo\n$username ALL=(ALL) NOPASSWD:ALL\n"
-            } else {
-                "# DevPocket password-protected sudo\n$username ALL=(ALL) ALL\n"
-            }
-            
-            val sudoersFile = File(sudoersDir, "devpocket-$username")
-            sudoersFile.writeText(sudoersContent)
-            sudoersFile.setReadable(true, true)
-            sudoersFile.setWritable(false, true)
-            sudoersFile.setExecutable(false, false)
-            
-            // 7. Write apt config to disable sandbox (prevents setresuid errors in PRoot)
-            val aptConfigDir = File(debianDir, "etc/apt/apt.conf.d")
-            aptConfigDir.mkdirs()
-            File(aptConfigDir, "01-devpocket-sandbox").writeText("APT::Sandbox::User \"root\";\n")
-            
-            // 8. Upgrade sources.list to Bookworm (Debian 12) for current GPG keys
-            val sourcesListDir = File(debianDir, "etc/apt")
-            sourcesListDir.mkdirs()
-            val sourcesContent = """
-                deb [trusted=yes] http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
-                deb [trusted=yes] http://deb.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
-                deb [trusted=yes] http://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
-            """.trimIndent()
-            File(sourcesListDir, "sources.list").writeText(sourcesContent + "\n")
-            
-            // 9. Allow unauthenticated repos for initial bootstrap (expired Bullseye keys)
-            File(aptConfigDir, "02-devpocket-allow-unauthenticated").writeText(
-                "Acquire::AllowInsecureRepositories \"true\";\nAPT::Get::AllowUnauthenticated \"true\";\n"
-            )
-            
-            // 10. Create PRoot/chroot compatibility scripts
-            // These no-op scripts prevent dpkg maintainer scripts from failing in PRoot
-            val usrSbinDir = File(debianDir, "usr/sbin")
-            usrSbinDir.mkdirs()
-            val sbinDir = File(debianDir, "sbin")
-            sbinDir.mkdirs()
-            
-            // No-op dpkg-preconfigure (Perl not in minimal rootfs)
-            val dpkgPreconfigFile = File(usrSbinDir, "dpkg-preconfigure")
-            dpkgPreconfigFile.writeText("#!/bin/sh\nexit 0\n")
-            dpkgPreconfigFile.setExecutable(true, false)
-            
-            // No-op ldconfig (can't modify shared lib cache in PRoot)
-            val ldconfigFile = File(sbinDir, "ldconfig")
-            ldconfigFile.writeText("#!/bin/sh\nexit 0\n")
-            ldconfigFile.setExecutable(true, false)
-            // Also in /usr/sbin
-            File(usrSbinDir, "ldconfig").writeText("#!/bin/sh\nexit 0\n")
-            File(usrSbinDir, "ldconfig").setExecutable(true, false)
-            
-            // No-op start-stop-daemon (no init system in PRoot)
-            val startStopFile = File(usrSbinDir, "start-stop-daemon")
-            startStopFile.writeText("#!/bin/sh\nexit 0\n")
-            startStopFile.setExecutable(true, false)
-            
-            // No-op invoke-rc.d (no init system in PRoot)
-            val invokeRcdFile = File(usrSbinDir, "invoke-rc.d")
-            invokeRcdFile.writeText("#!/bin/sh\nexit 0\n")
-            invokeRcdFile.setExecutable(true, false)
-            
-            // No-op update-rc.d (no init system in PRoot)
-            val updateRcdFile = File(usrSbinDir, "update-rc.d")
-            updateRcdFile.writeText("#!/bin/sh\nexit 0\n")
-            updateRcdFile.setExecutable(true, false)
-            
-            // No-op service (no init system in PRoot)
-            val serviceFile = File(usrSbinDir, "service")
-            serviceFile.writeText("#!/bin/sh\nexit 0\n")
-            serviceFile.setExecutable(true, false)
-            
-            // Policy-rc.d: tell dpkg to never start services (return 101 = action forbidden)
-            val policyFile = File(usrSbinDir, "policy-rc.d")
-            policyFile.writeText("#!/bin/sh\nexit 101\n")
-            policyFile.setExecutable(true, false)
-            
-            // 11. Configure dpkg to force through errors in PRoot
-            val dpkgConfigDir = File(debianDir, "etc/dpkg/dpkg.cfg.d")
-            dpkgConfigDir.mkdirs()
-            File(dpkgConfigDir, "01-devpocket-force").writeText(
-                "force-overwrite\nforce-confnew\n"
-            )
-            
-            // 12. Write first-boot key setup script (optional: installs proper Debian keys)
-            val setupBinDir = File(debianDir, "usr/local/bin")
-            setupBinDir.mkdirs()
-            val setupScript = File(setupBinDir, "devpocket-setup-keys")
-            setupScript.writeText("""#!/bin/bash
-# DevPocket: Install proper Debian archive GPG keys
-# After running this, you can remove [trusted=yes] from /etc/apt/sources.list
-set -e
-echo "Installing Debian archive keyring..."
-apt update && apt install -y debian-archive-keyring
-# Rewrite sources.list without [trusted=yes]
-cat > /etc/apt/sources.list << 'EOF'
-deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
-deb http://deb.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
-deb http://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
-EOF
-apt update
-echo "Done! GPG keys installed and sources.list updated."
-""")
-            setupScript.setExecutable(true, false)
-            
-            // Set user home directory ownership/permissions (simulate Linux ownership)
-            // Note: On Android's app-private filesystem, ownership is limited, but we can set permissions
-            setOwnableDirectory(userHome, true)
-            
-            Log.i(TAG, "User account created successfully: $username")
-            Log.i(TAG, "  Home directory: ${userHome.absolutePath}")
-            Log.i(TAG, "  Sudo mode: $sudoMode")
-            Log.i(TAG, "  Shell: /bin/bash")
-            
-            true
-        } catch (e: Exception) {
-            Log.e(TAG, "User account creation failed: ${e.message}", e)
-            false
-        }
-    }
-    
-    private fun setOwnableDirectory(dir: File, executable: Boolean) {
-        try {
-            dir.setReadable(true, true)
-            dir.setWritable(true, true)
-            if (executable) {
-                dir.setExecutable(true, true)
-            }
-            
-            // Recursively set permissions on all subdirectories
-            dir.listFiles()?.forEach { child ->
-                if (child.isDirectory) {
-                    child.setReadable(true, true)
-                    child.setWritable(true, true)
-                    child.setExecutable(true, true)
-                    setOwnableDirectory(child, true)
-                } else {
-                    child.setReadable(true, true)
-                    child.setWritable(true, true)
-                }
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Could not set directory permissions: ${e.message}")
-        }
-    }
-
-    private fun writeManifest(manifest: InstallManifest) {
-        try {
-            // Serialize manifest to JSON and write to file
-            val json = buildString {
-                append("{\n")
-                append("  \"version\": \"${manifest.version}\",\n")
-                append("  \"rootfsVersion\": \"${manifest.rootfsVersion}\",\n")
-                append("  \"installedAt\": ${manifest.installedAt},\n")
-                append("  \"rootfsPath\": \"${manifest.rootfsPath}\",\n")
-                append("  \"checksum\": \"${manifest.checksum}\",\n")
-                append("  \"extractedSuccessfully\": ${manifest.extractedSuccessfully}\n")
-                append("}")
-            }
-            
-            manifestFile.writeText(json)
-            Log.i(TAG, "Installation manifest written to ${manifestFile.absolutePath}")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to write manifest: ${e.message}", e)
-        }
-    }
-
-    private fun publishProgress(phase: String, current: Long, total: Long) {
-        val percent = if (total > 0) ((current.toFloat() / total) * 100).toInt() else 0
-        val progress = InstallProgress(phase, current, total, percent)
-        
-        stateManager.setInstallProgress(percent)
-        progressCallback?.invoke(progress)
-        
-        Log.d(TAG, "Progress: $phase ${percent}% ($current/$total bytes)")
-    }
-
-    /**
-     * Repair corrupted installation
-     */
     fun repair(): Boolean {
-        Log.i(TAG, "Starting repair operation")
-        
         return try {
-            // Check health
-            if (!isHealthy()) {
-                Log.i(TAG, "Installation not healthy, attempting repair...")
-                
-                // Attempt basic repairs:
-                // 1. Check for broken symlinks
-                // 2. Verify file permissions
-                // 3. Re-extract critical files if missing
-                
-                // If repairs fail, recommend full reinstall
-                stateManager.setInstallError("Repair incomplete. Please reinstall.")
-                return false
+            Log.i(TAG, "Repairing embedded Termux runtime")
+            ensureBaseDirectories()
+            patchTextPrefixReferences()
+            markExecutables(termuxPrefix)
+            ensureTermuxPackageManagerDirectories()
+            writeWrapperScripts()
+            if (debianRoot.exists()) {
+                finalizeDebianEnvironment()
             }
-            
-            Log.i(TAG, "Repair successful")
             stateManager.setRuntimeHealthy(true)
             true
         } catch (e: Exception) {
             Log.e(TAG, "Repair failed: ${e.message}", e)
+            stateManager.setInstallError(e.message ?: "Repair failed")
             false
         }
     }
 
-    /**
-     * Check installation health
-     */
-    private fun isHealthy(): Boolean {
-        return debianDir.exists() && 
-               File(debianDir, "bin/bash").exists() &&
-               File(debianDir, "usr/bin/apt").exists()
-    }
-
-    /**
-     * Cleanup temporary files
-     */
     fun cleanup() {
         try {
             tempDir.deleteRecursively()
-            Log.i(TAG, "Temporary files cleaned up")
+            Log.i(TAG, "Temporary bootstrap files cleaned up")
         } catch (e: Exception) {
-            Log.e(TAG, "Cleanup failed: ${e.message}")
+            Log.w(TAG, "Cleanup failed: ${e.message}")
         }
     }
 
-    /**
-     * Uninstall Debian environment (factory reset)
-     */
-    /**
-     * Copy shell wrapper script into Debian bin directory
-     */
-    internal fun copyShellWrapperToDebianBin(debianDir: File) {
-        val binDir = File(debianDir, "bin")
-        binDir.mkdirs()
-        val username = stateManager.getConfig().username ?: "devpocket"
-        val appDataDir = "/data/data/${context.packageName}"
-        
-        val wrapperFile = File(binDir, "devpocket-shell")
-        val wrapperScript = """#!/system/bin/sh
-# DevPocket shell wrapper - sets up Debian environment
-unset LD_PRELOAD
-export DEVPOCKET_DEBIAN_ROOT="${appDataDir}/files/linux/debian"
-export DEVPOCKET_APP_CACHE="${appDataDir}/cache"
-export DEVPOCKET_APP_FILES="${appDataDir}/files"
-export DEVPOCKET_RUNTIME_BIN="${appDataDir}/files/runtime/bin"
-export LD_LIBRARY_PATH="${appDataDir}/files/runtime/lib:${'$'}{LD_LIBRARY_PATH:-}"
-export DEBIAN_FRONTEND=noninteractive
-export USER="$username"
-export LOGNAME="$username"
-export HOME="/home/$username"
-export TERM=xterm-256color
-export COLORTERM=truecolor
-export LC_ALL=C.UTF-8
-export LANG=C.UTF-8
-export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-export PROOT_TMP_DIR="${'$'}{DEVPOCKET_APP_CACHE}/proot-tmp"
-export PROOT_NO_SECCOMP=1
-
-# Android sh (mksh) requires TMPDIR to be set for heredocs (<< EOF) to work!
-export TMPDIR="${'$'}{DEVPOCKET_APP_CACHE}/android-tmp"
-mkdir -p "${'$'}PROOT_TMP_DIR" "${'$'}TMPDIR"
-chmod 1777 "${'$'}PROOT_TMP_DIR" "${'$'}TMPDIR"
-
-PROOT_BIN="${'$'}{DEVPOCKET_RUNTIME_BIN}/proot"
-FALLBACK_SHELL="/system/bin/sh"
-run_fallback_shell() {
-  export PATH="${'$'}{DEVPOCKET_RUNTIME_BIN}:${'$'}PATH"
-  export LD_LIBRARY_PATH="${'$'}{DEVPOCKET_RUNTIME_BIN}/../lib:${'$'}LD_LIBRARY_PATH"
-  export PS1='android@devpocket:\w\\$ '
-  if [ "$1" = "-lc" ] && [ -n "$2" ]; then
-    shift
-    exec "${'$'}FALLBACK_SHELL" -c "$1"
-  fi
-  if [ "$1" = "-l" ] && [ "$2" = "-c" ] && [ -n "$3" ]; then
-    shift 2
-    exec "${'$'}FALLBACK_SHELL" -c "$1"
-  fi
-  if [ "$1" = "-c" ] && [ -n "$2" ]; then
-    shift
-    exec "${'$'}FALLBACK_SHELL" -c "$1"
-  fi
-  exec "${'$'}FALLBACK_SHELL" -i
-}
-if [ ! -x "${'$'}PROOT_BIN" ]; then
-  echo "DevPocket warning: missing proot runtime at ${'$'}PROOT_BIN; using bundled shell." >&2
-  run_fallback_shell "$@"
-fi
-
-mkdir -p "${'$'}PROOT_TMP_DIR" "${'$'}{DEVPOCKET_APP_CACHE}/android-tmp"
-
-# === Fake /proc/sys/crypto/fips_enabled for libgcrypt ===
-FIPS_DIR="${'$'}{DEVPOCKET_APP_CACHE}/fakeproc"
-mkdir -p "${'$'}FIPS_DIR"
-echo "0" > "${'$'}{FIPS_DIR}/fips_enabled"
-
-# === Fix apt for PRoot environment (HOST SIDE modifications) ===
-DEBIAN_ROOT="${'$'}{DEVPOCKET_DEBIAN_ROOT}"
-
-# 1) Replace /usr/lib/apt/methods/gpgv with a protocol-speaking handler
-APT_METHODS_DIR="${'$'}{DEBIAN_ROOT}/usr/lib/apt/methods"
-APT_GPGV="${'$'}{APT_METHODS_DIR}/gpgv"
-if [ -f "${'$'}APT_GPGV" ]; then
-  MAGIC=${'$'}(head -c 4 "${'$'}APT_GPGV" 2>/dev/null | cat -v)
-  case "${'$'}MAGIC" in
-    *ELF*) [ -f "${'$'}{APT_GPGV}.orig" ] || cp "${'$'}APT_GPGV" "${'$'}{APT_GPGV}.orig" ;;
-  esac
-fi
-cat > "${'$'}APT_GPGV" << 'GPGV_METHOD_EOF'
-#!/bin/sh
-echo "100 Capabilities"
-echo "Version: 1.2"
-echo "Single-Instance: true"
-echo ""
-while IFS= read -r line; do
-  case "${'$'}line" in
-    "600 URI Acquire")
-      URI=""
-      FILENAME=""
-      while IFS= read -r hdr; do
-        [ -z "${'$'}hdr" ] && break
-        case "${'$'}hdr" in
-          URI:*) URI=${'$'}{hdr#URI: } ;;
-          Filename:*) FILENAME=${'$'}{hdr#Filename: } ;;
-        esac
-      done
-      echo "201 URI Done"
-      echo "URI: ${'$'}URI"
-      echo "Filename: ${'$'}FILENAME"
-      echo "Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg"
-      echo ""
-      ;;
-    "601 Configuration"|"6"*)
-      while IFS= read -r hdr; do
-        [ -z "${'$'}hdr" ] && break
-      done
-      ;;
-    "") ;;
-  esac
-done
-GPGV_METHOD_EOF
-chmod 755 "${'$'}APT_GPGV"
-
-# 2) Replace /usr/bin/gpgv with no-op
-GPGV_BIN="${'$'}{DEBIAN_ROOT}/usr/bin/gpgv"
-if [ -f "${'$'}GPGV_BIN" ]; then
-  MAGIC=${'$'}(head -c 4 "${'$'}GPGV_BIN" 2>/dev/null | cat -v)
-  case "${'$'}MAGIC" in
-    *ELF*)
-      [ -f "${'$'}{GPGV_BIN}.orig" ] || cp "${'$'}GPGV_BIN" "${'$'}{GPGV_BIN}.orig"
-      printf '#!/bin/sh\nexit 0\n' > "${'$'}GPGV_BIN"
-      chmod 755 "${'$'}GPGV_BIN"
-      ;;
-  esac
-fi
-
-# 3) Write sources.list with [trusted=yes]
-cat > "${'$'}{DEBIAN_ROOT}/etc/apt/sources.list" << 'SOURCES_EOF'
-deb [trusted=yes] http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
-deb [trusted=yes] http://deb.debian.org/debian-security bookworm-security main contrib
-deb [trusted=yes] http://deb.debian.org/debian bookworm-updates main contrib
-SOURCES_EOF
-
-# 4) APT config: allow insecure repos
-mkdir -p "${'$'}{DEBIAN_ROOT}/etc/apt/apt.conf.d"
-cat > "${'$'}{DEBIAN_ROOT}/etc/apt/apt.conf.d/99allow-insecure" << 'APT_CONF_EOF'
-Acquire::AllowInsecureRepositories "true";
-Acquire::AllowDowngradeToInsecureRepositories "true";
-APT::Get::AllowUnauthenticated "true";
-Acquire::Check-Valid-Until "false";
-APT_CONF_EOF
-
-# 5) Clean stale sources.list.d entries
-rm -f "${'$'}{DEBIAN_ROOT}/etc/apt/sources.list.d/"*.sources 2>/dev/null
-rm -f "${'$'}{DEBIAN_ROOT}/etc/apt/sources.list.d/"* 2>/dev/null
-
-# === Pre-create essential directories in Debian rootfs (host-side) ===
-# proot's mkdirat may not be intercepted on all Android kernel versions.
-# Directories that apt, dpkg, and bash need MUST exist before proot starts.
-mkdir -p "${'$'}{DEBIAN_ROOT}/home/$username" 2>/dev/null || true
-mkdir -p "${'$'}{DEBIAN_ROOT}/tmp" 2>/dev/null || true
-mkdir -p "${'$'}{DEBIAN_ROOT}/run" 2>/dev/null || true
-mkdir -p "${'$'}{DEBIAN_ROOT}/var/tmp" 2>/dev/null || true
-mkdir -p "${'$'}{DEBIAN_ROOT}/var/run" 2>/dev/null || true
-mkdir -p "${'$'}{DEBIAN_ROOT}/var/log/apt" 2>/dev/null || true
-mkdir -p "${'$'}{DEBIAN_ROOT}/var/lib/apt/lists/partial" 2>/dev/null || true
-mkdir -p "${'$'}{DEBIAN_ROOT}/var/lib/dpkg/info" 2>/dev/null || true
-mkdir -p "${'$'}{DEBIAN_ROOT}/var/lib/dpkg/updates" 2>/dev/null || true
-mkdir -p "${'$'}{DEBIAN_ROOT}/var/lib/dpkg/parts" 2>/dev/null || true
-mkdir -p "${'$'}{DEBIAN_ROOT}/var/cache/apt/archives/partial" 2>/dev/null || true
-mkdir -p "${'$'}{DEBIAN_ROOT}/var/cache/debconf" 2>/dev/null || true
-chmod 1777 "${'$'}{DEBIAN_ROOT}/tmp" 2>/dev/null || true
-chmod 1777 "${'$'}{DEBIAN_ROOT}/var/tmp" 2>/dev/null || true
-# Create empty dpkg/apt lock files if missing
-[ -f "${'$'}{DEBIAN_ROOT}/var/lib/dpkg/lock" ] || touch "${'$'}{DEBIAN_ROOT}/var/lib/dpkg/lock" 2>/dev/null || true
-[ -f "${'$'}{DEBIAN_ROOT}/var/lib/dpkg/lock-frontend" ] || touch "${'$'}{DEBIAN_ROOT}/var/lib/dpkg/lock-frontend" 2>/dev/null || true
-[ -f "${'$'}{DEBIAN_ROOT}/var/cache/apt/archives/lock" ] || touch "${'$'}{DEBIAN_ROOT}/var/cache/apt/archives/lock" 2>/dev/null || true
-[ -f "${'$'}{DEBIAN_ROOT}/var/lib/apt/lists/lock" ] || touch "${'$'}{DEBIAN_ROOT}/var/lib/apt/lists/lock" 2>/dev/null || true
-# Ensure dpkg database files exist (apt refuses to start without them, even if empty)
-[ -f "${'$'}{DEBIAN_ROOT}/var/lib/dpkg/status" ] || touch "${'$'}{DEBIAN_ROOT}/var/lib/dpkg/status" 2>/dev/null || true
-[ -f "${'$'}{DEBIAN_ROOT}/var/lib/dpkg/available" ] || touch "${'$'}{DEBIAN_ROOT}/var/lib/dpkg/available" 2>/dev/null || true
-# Sync Android's live DNS settings into Debian rootfs so apt can resolve hostnames
-if [ -f /etc/resolv.conf ]; then
-  cp /etc/resolv.conf "${'$'}{DEBIAN_ROOT}/etc/resolv.conf" 2>/dev/null || true
-elif [ ! -s "${'$'}{DEBIAN_ROOT}/etc/resolv.conf" ]; then
-  printf 'nameserver 8.8.8.8\nnameserver 1.1.1.1\n' > "${'$'}{DEBIAN_ROOT}/etc/resolv.conf" 2>/dev/null || true
-fi
-
-# For non-interactive -c invocations skip --login (avoids profile side-effects).
-# For interactive shells keep --login so .bash_profile is sourced.
-_BASH_OPTS="--login"
-for _arg in "$@"; do
-  case "${'$'}_arg" in -c) _BASH_OPTS="" ; break ;; esac
-done
-
-# === Install getcwd LD_PRELOAD shim ===
-# Android's seccomp filter blocks the getcwd syscall (#17) for app processes.
-# glibc calls it directly; proot can't intercept what the kernel kills first.
-# This pre-compiled shim overrides getcwd() to use readlink(/proc/self/cwd)
-# which proot DOES intercept correctly. Without it dpkg fails with:
-#   "sh: 0: getcwd() failed: Function not implemented"
-GETCWD_SHIM_SRC="${'$'}{DEVPOCKET_RUNTIME_BIN}/proot-getcwd.so"
-GETCWD_SHIM_DST="${'$'}{DEBIAN_ROOT}/usr/local/lib/proot-getcwd.so"
-if [ -f "${'$'}GETCWD_SHIM_SRC" ]; then
-  mkdir -p "${'$'}{DEBIAN_ROOT}/usr/local/lib"
-  cp "${'$'}GETCWD_SHIM_SRC" "${'$'}GETCWD_SHIM_DST" 2>/dev/null || true
-  chmod 755 "${'$'}GETCWD_SHIM_DST" 2>/dev/null || true
-fi
-# Set LD_PRELOAD only if the shim was successfully copied
-if [ -f "${'$'}GETCWD_SHIM_DST" ]; then
-  PROOT_LD_PRELOAD="/usr/local/lib/proot-getcwd.so"
-else
-  PROOT_LD_PRELOAD=""
-fi
-
-# Determine proot working directory: use home if it exists, otherwise / (always valid).
-# This prevents proot's initial chdir from failing silently, which would cause
-# getcwd() to return ENOSYS for the entire bash session.
-PROOT_WD="/home/$username"
-if [ ! -d "${'$'}{DEBIAN_ROOT}/home/$username" ]; then
-  PROOT_WD="/"
-fi
-
-# === Launch Debian PRoot ===
-# --kill-on-exit: kill all traced child processes when proot exits (prevents zombies)
-exec "${'$'}PROOT_BIN" \
-  --kill-on-exit \
-  --link2symlink \
-  -0 \
-  -r "${'$'}DEBIAN_ROOT" \
-  -b /dev \
-  -b /proc \
-  -b "${'$'}{FIPS_DIR}/fips_enabled:/proc/sys/crypto/fips_enabled" \
-  -b /sys \
-  -b /system \
-  -b /apex \
-  -b /sdcard \
-  -b "${'$'}{DEVPOCKET_APP_CACHE}/android-tmp:/tmp" \
-  -w "${'$'}PROOT_WD" \
-    /usr/bin/env -i \
-    HOME="/home/$username" \
-    USER="$username" \
-    LOGNAME="$username" \
-    PWD="${'$'}PROOT_WD" \
-    TERM=xterm-256color \
-    COLORTERM=truecolor \
-    LANG=C.UTF-8 \
-    LC_ALL=C.UTF-8 \
-    DEBIAN_FRONTEND=noninteractive \
-    PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
-    LD_PRELOAD="${'$'}PROOT_LD_PRELOAD" \
-  /bin/bash ${'$'}_BASH_OPTS "$@"
-"""
-        
-        wrapperFile.writeText(wrapperScript)
-        wrapperFile.setExecutable(true, false)
-        Log.i(TAG, "Shell wrapper created at: ${wrapperFile.absolutePath}")
+    private fun ensureBaseDirectories() {
+        linuxBase.mkdirs()
+        tempDir.mkdirs()
+        termuxHome.mkdirs()
+        termuxTmp.mkdirs()
+        termuxCompatCache.mkdirs()
+        TheiaRuntimePaths.configDir(context).mkdirs()
+        TheiaRuntimePaths.extensionsRoot(context).mkdirs()
     }
 
-    fun uninstall(): Boolean {
-        return try {
-            debianDir.deleteRecursively()
-            manifestFile.delete()
-            tempDir.deleteRecursively()
-            stateManager.reset()
-            Log.i(TAG, "Uninstall successful")
-            true
-        } catch (e: Exception) {
-            Log.e(TAG, "Uninstall failed: ${e.message}", e)
-            false
+    private fun seedDefaultAccountState() {
+        val config = stateManager.getConfig()
+        if (config.username != ROOT_USERNAME) {
+            stateManager.setUsername(ROOT_USERNAME)
         }
+        if (config.sudoMode != UserAccountConfig.SUDO_MODE_PASSWORDLESS) {
+            stateManager.setSudoMode(UserAccountConfig.SUDO_MODE_PASSWORDLESS)
+        }
+        stateManager.setSudoPassword(null)
+    }
+
+    private fun resolveBootstrapArchive(): BootstrapArchive {
+        val abi = Build.SUPPORTED_ABIS.firstOrNull().orEmpty()
+        val arch = when {
+            abi.contains("arm64") -> "aarch64"
+            abi.contains("armeabi") -> "arm"
+            abi.contains("x86_64") -> "x86_64"
+            else -> throw IllegalStateException("Unsupported ABI for Termux bootstrap: $abi")
+        }
+        return bootstrapArchives[arch]
+            ?: throw IllegalStateException("No bootstrap archive configured for architecture $arch")
+    }
+
+    private fun ensureBootstrapInstalled() {
+        if (File(termuxBin, "bash").exists() && File(termuxBin, "pkg").exists()) {
+            Log.i(TAG, "Termux bootstrap already present at ${termuxPrefix.absolutePath}")
+            patchTextPrefixReferences()
+            markExecutables(termuxPrefix)
+            ensureTermuxPackageManagerDirectories()
+            writeWrapperScripts()
+            ensureBootstrapSecondStageCompleted()
+            return
+        }
+
+        val archive = resolveBootstrapArchive()
+        val archiveFile = File(tempDir, "bootstrap-${archive.arch}.zip")
+
+        publishProgress("bootstrap-downloading", 0, archive.expectedBytes)
+        downloadFile(archive.url, archiveFile)
+
+        publishProgress("bootstrap-verifying", 0, archive.expectedBytes)
+        val checksum = calculateSHA256(archiveFile)
+        Log.i(TAG, "Bootstrap checksum: $checksum")
+        if (checksum != archive.sha256) {
+            archiveFile.delete()
+            throw IllegalStateException("Bootstrap checksum mismatch for ${archive.arch}")
+        }
+
+        publishProgress("bootstrap-extracting", 0, 100)
+        extractBootstrapZip(archiveFile, termuxPrefix)
+        restoreBootstrapSymlinks()
+        patchTextPrefixReferences()
+        markExecutables(termuxPrefix)
+        ensureTermuxPackageManagerDirectories()
+        writeWrapperScripts()
+        ensureBootstrapSecondStageCompleted()
+    }
+
+    private fun ensureBootstrapSecondStageCompleted() {
+        val secondStageScript = File(
+            termuxPrefix,
+            "etc/termux/termux-bootstrap/second-stage/termux-bootstrap-second-stage.sh"
+        )
+        val secondStageLock = File(
+            termuxPrefix,
+            "etc/termux/termux-bootstrap/second-stage/termux-bootstrap-second-stage.sh.lock"
+        )
+
+        if (!secondStageScript.exists()) {
+            Log.i(TAG, "No explicit Termux second-stage script found; skipping")
+            return
+        }
+        if (secondStageLock.exists() || Files.isSymbolicLink(secondStageLock.toPath())) {
+            Log.i(TAG, "Termux bootstrap second-stage already completed")
+            return
+        }
+
+        val bash = File(termuxBin, "bash")
+        Log.i(TAG, "Second-stage diagnostics: " +
+            "bash=${bash.absolutePath} exists=${bash.exists()} exec=${bash.canExecute()} size=${bash.length()} " +
+            "script=${secondStageScript.absolutePath} exists=${secondStageScript.exists()} size=${secondStageScript.length()} " +
+            "proot=${runtimeProot.absolutePath} exists=${runtimeProot.exists()}")
+
+        publishProgress("bootstrap-configuring", 0, 100)
+        secondStageScript.setExecutable(true, false)
+
+        // Primary approach: run via proot compat wrapper so dpkg's compiled-in legacy paths
+        // (e.g. /data/data/com.termux/files/usr/etc/dpkg/dpkg.cfg.d) resolve through the
+        // bind mount to the actual app-prefix location.
+        try {
+            runTermuxCompatCommand(
+                listOf(bash.absolutePath, secondStageScript.absolutePath),
+                "bootstrap-configuring",
+                termuxDpkgEnv()
+            )
+            publishProgress("bootstrap-configuring", 100, 100)
+            return
+        } catch (e: Exception) {
+            Log.w(TAG, "Proot compat second-stage failed (${e.message}); trying direct fallback")
+        }
+
+        // Fallback: run directly via env wrapper (no proot). This works if the script's
+        // text was patched to app-prefix paths, but dpkg binary calls may still fail
+        // on hardcoded config paths.
+        try {
+            runTermuxCommand(
+                listOf(bash.absolutePath, secondStageScript.absolutePath),
+                "bootstrap-configuring-direct",
+                termuxDpkgEnvLocal()
+            )
+            publishProgress("bootstrap-configuring", 100, 100)
+            return
+        } catch (e: Exception) {
+            Log.w(TAG, "Direct second-stage execution also failed (${e.message}); creating lock")
+        }
+
+        // Last resort: skip the second-stage and run dpkg --configure manually.
+        Log.i(TAG, "Last resort: creating second-stage lock and running dpkg --configure -a")
+        secondStageLock.parentFile?.mkdirs()
+        secondStageLock.writeText("skipped-by-devpocket-fallback")
+        try {
+            runTermuxCompatCommand(
+                listOf(bash.absolutePath, "-c",
+                    "dpkg --configure -a --force-confnew --force-script-chrootless 2>/dev/null || true"),
+                "bootstrap-dpkg-configure",
+                termuxDpkgEnv()
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "dpkg --configure fallback failed (non-fatal): ${e.message}")
+        }
+        publishProgress("bootstrap-configuring", 100, 100)
+    }
+
+    private fun ensureTermuxPackageManagerDirectories() {
+        listOf(
+            "var/lib/dpkg/info",
+            "var/lib/dpkg/updates",
+            "var/lib/dpkg/parts",
+            "var/lib/dpkg/triggers",
+            "var/lib/apt/lists/partial",
+            "var/cache/apt/archives/partial",
+            "var/log/apt",
+            "etc/dpkg/dpkg.cfg.d",
+            "etc/apt/apt.conf.d",
+            "etc/apt/sources.list.d",
+            "etc/apt/preferences.d",
+            "tmp"
+        ).forEach { relativePath ->
+            File(termuxPrefix, relativePath).mkdirs()
+        }
+
+        listOf(
+            "var/lib/dpkg/lock",
+            "var/lib/dpkg/lock-frontend"
+        ).forEach { relativePath ->
+            val lockFile = File(termuxPrefix, relativePath)
+            lockFile.parentFile?.mkdirs()
+            if (!lockFile.exists()) {
+                lockFile.createNewFile()
+            }
+        }
+
+        val statusFile = File(termuxPrefix, "var/lib/dpkg/status")
+        if (!statusFile.exists()) {
+            statusFile.parentFile?.mkdirs()
+            statusFile.createNewFile()
+        }
+
+        val dpkgCfgDir = File(termuxPrefix, "etc/dpkg/dpkg.cfg.d")
+        dpkgCfgDir.mkdirs()
+        val dpkgCfg = File(dpkgCfgDir, "01-devpocket")
+        dpkgCfg.writeText("force-confnew\n")
+
+        ensureAptConfig()
+    }
+
+    private fun ensureAptConfig() {
+        val aptConfDir = File(termuxPrefix, "etc/apt/apt.conf.d")
+        aptConfDir.mkdirs()
+        val aptConf = File(aptConfDir, "01-devpocket")
+        aptConf.writeText(
+            buildString {
+                appendLine("APT::Sandbox::User \"root\";")
+                // Set the base Dir so apt resolves all relative paths under the legacy prefix
+                // (used when running through the proot compat wrapper)
+                appendLine("Dir \"$LEGACY_TERMUX_PREFIX\";")
+                appendLine("Dir::Bin::dpkg \"$LEGACY_TERMUX_PREFIX/bin/dpkg\";")
+            }
+        )
+    }
+
+    private fun downloadFile(url: String, outputFile: File) {
+        if (outputFile.exists() && outputFile.length() > 0) {
+            Log.i(TAG, "Reusing cached download: ${outputFile.absolutePath}")
+            return
+        }
+
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 30_000
+            readTimeout = 60_000
+        }
+        connection.connect()
+        if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+            throw IllegalStateException("Download failed: HTTP ${connection.responseCode} for $url")
+        }
+
+        val totalBytes = connection.contentLengthLong.takeIf { it > 0 } ?: 1L
+        var downloadedBytes = 0L
+        outputFile.parentFile?.mkdirs()
+        connection.inputStream.use { input ->
+            FileOutputStream(outputFile).use { output ->
+                val buffer = ByteArray(16 * 1024)
+                var bytesRead: Int
+                while (input.read(buffer).also { bytesRead = it } != -1) {
+                    output.write(buffer, 0, bytesRead)
+                    downloadedBytes += bytesRead
+                    publishProgress("bootstrap-downloading", downloadedBytes, totalBytes)
+                }
+            }
+        }
+        Log.i(TAG, "Downloaded bootstrap archive to ${outputFile.absolutePath}")
+    }
+
+    private fun extractBootstrapZip(zipFile: File, destination: File) {
+        if (destination.exists()) {
+            destination.deleteRecursively()
+        }
+        destination.mkdirs()
+
+        ZipFile(zipFile).use { archive ->
+            val entries = archive.entries()
+            val totalEntries = archive.size().coerceAtLeast(1)
+            var processed = 0L
+
+            while (entries.hasMoreElements()) {
+                val entry = entries.nextElement()
+                writeZipEntry(archive, entry, destination)
+                processed += 1
+                publishProgress("bootstrap-extracting", processed, totalEntries.toLong())
+            }
+        }
+        Log.i(TAG, "Extracted bootstrap archive to ${destination.absolutePath}")
+    }
+
+    private fun writeZipEntry(archive: ZipFile, entry: ZipEntry, destination: File) {
+        val sanitized = entry.name.removePrefix("/")
+        if (sanitized.isBlank()) {
+            return
+        }
+
+        val output = File(destination, sanitized)
+        val canonicalDest = destination.canonicalPath + File.separator
+        val canonicalOutput = output.canonicalPath
+        require(canonicalOutput.startsWith(canonicalDest)) { "Blocked path traversal for ${entry.name}" }
+
+        if (entry.isDirectory) {
+            output.mkdirs()
+            return
+        }
+
+        output.parentFile?.mkdirs()
+        archive.getInputStream(entry).use { input ->
+            FileOutputStream(output).use { outputStream ->
+                input.copyTo(outputStream)
+            }
+        }
+    }
+
+    private fun restoreBootstrapSymlinks() {
+        val symlinksFile = File(termuxPrefix, "SYMLINKS.txt")
+        if (!symlinksFile.exists()) {
+            Log.w(TAG, "Bootstrap SYMLINKS.txt missing; nothing to restore")
+            return
+        }
+
+        symlinksFile.readLines().forEach { line ->
+            val parts = line.split('←')
+            if (parts.size != 2) {
+                return@forEach
+            }
+            val source = parts[0].trim()
+            val linkPath = File(termuxPrefix, parts[1].trim())
+            try {
+                linkPath.parentFile?.mkdirs()
+                linkPath.delete()
+                Os.symlink(source, linkPath.absolutePath)
+            } catch (e: ErrnoException) {
+                Log.w(TAG, "Failed restoring bootstrap symlink ${linkPath.absolutePath}: ${e.message}")
+            }
+        }
+        symlinksFile.delete()
+        Log.i(TAG, "Restored bootstrap symlinks")
+    }
+
+    private fun patchTextPrefixReferences() {
+        var patchedFiles = 0
+        val actualPrefix = termuxPrefix.absolutePath
+        val actualHome = termuxHome.absolutePath
+        val legacyPrefixBytes = LEGACY_TERMUX_PREFIX.toByteArray(StandardCharsets.UTF_8)
+        val legacyHomeBytes = LEGACY_TERMUX_HOME.toByteArray(StandardCharsets.UTF_8)
+
+        termuxPrefix.walkTopDown().forEach { file ->
+            if (!file.isFile || file.length() > TEXT_PATCH_LIMIT_BYTES) {
+                return@forEach
+            }
+
+            val raw = try {
+                file.readBytes()
+            } catch (_: Exception) {
+                return@forEach
+            }
+
+            if (!raw.containsSlice(legacyPrefixBytes) && !raw.containsSlice(legacyHomeBytes)) {
+                return@forEach
+            }
+
+            if (!looksLikeText(raw)) {
+                return@forEach
+            }
+
+            val original = try {
+                raw.toString(StandardCharsets.UTF_8)
+            } catch (_: Exception) {
+                return@forEach
+            }
+
+            val patched = original
+                .replace(LEGACY_TERMUX_HOME, actualHome)
+                .replace(LEGACY_TERMUX_PREFIX, actualPrefix)
+
+            if (patched != original) {
+                file.writeText(patched, StandardCharsets.UTF_8)
+                patchedFiles += 1
+            }
+        }
+
+        Log.i(TAG, "Patched $patchedFiles Termux text files to app prefix")
+    }
+
+    private fun ByteArray.containsSlice(needle: ByteArray): Boolean {
+        if (needle.isEmpty() || this.size < needle.size) {
+            return false
+        }
+        outer@ for (index in 0..this.size - needle.size) {
+            for (offset in needle.indices) {
+                if (this[index + offset] != needle[offset]) {
+                    continue@outer
+                }
+            }
+            return true
+        }
+        return false
+    }
+
+    private fun looksLikeText(bytes: ByteArray): Boolean {
+        if (bytes.isEmpty()) {
+            return false
+        }
+        val sampleLength = minOf(bytes.size, 4096)
+        var printable = 0
+        for (index in 0 until sampleLength) {
+            val value = bytes[index].toInt() and 0xFF
+            if (value == 9 || value == 10 || value == 13 || value in 32..126) {
+                printable += 1
+            }
+        }
+        return printable.toDouble() / sampleLength.toDouble() > 0.85
+    }
+
+    private fun markExecutables(root: File) {
+        if (!root.exists()) {
+            return
+        }
+
+        root.walkTopDown().forEach { file ->
+            if (!file.isFile) {
+                return@forEach
+            }
+            if (shouldBeExecutable(file, root)) {
+                file.setReadable(true, false)
+                file.setExecutable(true, false)
+                if (!file.name.endsWith(".so") && !file.name.endsWith(".node")) {
+                    file.setWritable(true, true)
+                }
+            }
+        }
+    }
+
+    private fun shouldBeExecutable(file: File, root: File): Boolean {
+        val relative = file.relativeTo(root).invariantSeparatorsPath
+        return relative.startsWith("bin/") ||
+            relative.startsWith("libexec/") ||
+            file.name.endsWith(".so") ||
+            file.name.endsWith(".node")
+    }
+
+    private fun ensureHostPackagesInstalled() {
+        val proot = File(termuxBin, "proot")
+        val prootDistro = File(termuxBin, "proot-distro")
+        val node = File(termuxBin, "node")
+        if (proot.exists() && prootDistro.exists() && node.exists()) {
+            Log.i(TAG, "Required Termux host packages already installed")
+            return
+        }
+
+        // Pre-flight: verify the proot compat wrapper works with Termux bash (not just a system binary)
+        try {
+            runTermuxCompatCommand(
+                listOf(File(termuxBin, "bash").absolutePath, "-c", "echo proot-compat-test-ok"),
+                "proot-preflight"
+            )
+            Log.i(TAG, "Proot compatibility wrapper pre-flight passed (Termux bash works under proot)")
+        } catch (e: Exception) {
+            Log.e(TAG, "Proot compatibility wrapper pre-flight FAILED: ${e.message}. " +
+                "proot=${runtimeProot.absolutePath} exists=${runtimeProot.exists()} exec=${runtimeProot.canExecute()}")
+            throw IllegalStateException("Proot compatibility wrapper is not functional: ${e.message}", e)
+        }
+
+        publishProgress("termux-updating", 0, 100)
+        try {
+            runTermuxCompatShellCommand("pkg update -y", "termux-updating", termuxDpkgEnv())
+        } catch (e: Exception) {
+            Log.w(TAG, "pkg update failed on first attempt: ${e.message}; retrying once")
+            runTermuxCompatShellCommand("pkg update -y", "termux-updating", termuxDpkgEnv())
+        }
+        publishProgress("termux-updating", 100, 100)
+
+        // Install packages individually for better error isolation
+        val packages = TERMUX_PACKAGES.split(" ").filter { it.isNotBlank() }
+        publishProgress("termux-installing-packages", 0, 100)
+        for ((index, pkg) in packages.withIndex()) {
+            val pkgBin = File(termuxBin, pkg)
+            if (pkgBin.exists()) {
+                Log.i(TAG, "Package '$pkg' already present at ${pkgBin.absolutePath}")
+            } else {
+                runTermuxCompatShellCommand("pkg install -y $pkg", "termux-installing-$pkg", termuxDpkgEnv())
+            }
+            publishProgress("termux-installing-packages",
+                ((index + 1).toLong() * 100) / packages.size, 100)
+        }
+        publishProgress("termux-installing-packages", 100, 100)
+
+        patchTextPrefixReferences()
+        markExecutables(termuxPrefix)
+    }
+
+    private fun ensureDebianInstalled() {
+        if (File(debianRoot, "etc").exists()) {
+            Log.i(TAG, "Debian is already installed at ${debianRoot.absolutePath}")
+            return
+        }
+
+        publishProgress("debian-installing", 0, 100)
+        runTermuxCompatCommand(listOf(File(termuxBin, "proot-distro").absolutePath, "install", DEBIAN_ALIAS), "debian-installing")
+        publishProgress("debian-installing", 100, 100)
+    }
+
+    private fun finalizeDebianEnvironment() {
+        val rootHome = File(debianRoot, "root")
+        rootHome.mkdirs()
+
+        val bashrc = File(rootHome, ".bashrc")
+        val marker = "# DevPocket integration"
+        val addition = buildString {
+            appendLine()
+            appendLine(marker)
+            appendLine("alias android='cd /sdcard'")
+            appendLine("export TERM=xterm-256color")
+            appendLine("export COLORTERM=truecolor")
+            appendLine("export LANG=C.UTF-8")
+            appendLine("export LC_ALL=C.UTF-8")
+            appendLine("export ANDROID_STORAGE=/sdcard")
+            appendLine("export SSL_CERT_FILE=/opt/devpocket/etc/ca-certificates/cacert.pem")
+            appendLine("export GIT_SSL_CAINFO=/opt/devpocket/etc/ca-certificates/cacert.pem")
+            appendLine("export CURL_CA_BUNDLE=/opt/devpocket/etc/ca-certificates/cacert.pem")
+            appendLine("export NODE_EXTRA_CA_CERTS=/opt/devpocket/etc/ca-certificates/cacert.pem")
+        }
+        val originalBashrc = if (bashrc.exists()) bashrc.readText() else ""
+        if (!originalBashrc.contains(marker)) {
+            bashrc.writeText(originalBashrc + addition)
+        }
+
+        val bashProfile = File(rootHome, ".bash_profile")
+        if (!bashProfile.exists()) {
+            bashProfile.writeText("if [ -f ~/.bashrc ]; then\n    . ~/.bashrc\nfi\n")
+        }
+
+        createOrReplaceSymlink(File(rootHome, "storage"), "/sdcard")
+        createOrReplaceSymlink(File(rootHome, "Download"), "/sdcard/Download")
+        createOrReplaceSymlink(File(rootHome, "Downloads"), "/sdcard/Download")
+        createOrReplaceSymlink(File(rootHome, "Documents"), "/sdcard/Documents")
+        createOrReplaceSymlink(File(rootHome, "Pictures"), "/sdcard/Pictures")
+
+        writeWrapperScripts()
+        Log.i(TAG, "Finalized Debian root environment at ${rootHome.absolutePath}")
+    }
+
+    private fun createOrReplaceSymlink(link: File, target: String) {
+        try {
+            if (link.isDirectory) {
+                link.deleteRecursively()
+            } else {
+                link.delete()
+            }
+            link.parentFile?.mkdirs()
+            Os.symlink(target, link.absolutePath)
+        } catch (e: ErrnoException) {
+            Log.w(TAG, "Failed to create symlink ${link.absolutePath} -> $target: ${e.message}")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to prepare shortcut ${link.absolutePath}: ${e.message}")
+        }
+    }
+
+    private fun writeWrapperScripts() {
+        termuxBin.mkdirs()
+
+        val envWrapper = buildString {
+            appendLine("#!/system/bin/sh")
+            appendLine("ORIG_PATH=\"${'$'}PATH\"")
+            appendLine("ORIG_LD_LIBRARY_PATH=\"${'$'}LD_LIBRARY_PATH\"")
+            appendLine("export PREFIX=\"${termuxPrefix.absolutePath}\"")
+            appendLine("export HOME=\"${termuxHome.absolutePath}\"")
+            appendLine("export TMPDIR=\"${termuxTmp.absolutePath}\"")
+            appendLine("TERMUX_UID=${'$'}(id -u 2>/dev/null || true)")
+            appendLine("if [ -n \"${'$'}TERMUX_UID\" ]; then")
+            appendLine("  export TERMUX__UID=\"${'$'}TERMUX_UID\"")
+            appendLine("  export TERMUX__USER_ID=\"${'$'}TERMUX_UID\"")
+            appendLine("fi")
+            appendLine("if [ -n \"${'$'}ORIG_PATH\" ]; then")
+            appendLine("  export PATH=\"${termuxBin.absolutePath}:/system/bin:${'$'}ORIG_PATH\"")
+            appendLine("else")
+            appendLine("  export PATH=\"${termuxBin.absolutePath}:/system/bin\"")
+            appendLine("fi")
+            appendLine("if [ -n \"${'$'}ORIG_LD_LIBRARY_PATH\" ]; then")
+            appendLine("  export LD_LIBRARY_PATH=\"${termuxLib.absolutePath}:${'$'}ORIG_LD_LIBRARY_PATH\"")
+            appendLine("else")
+            appendLine("  export LD_LIBRARY_PATH=\"${termuxLib.absolutePath}\"")
+            appendLine("fi")
+            appendLine("export LANG=\"C.UTF-8\"")
+            appendLine("export LC_ALL=\"C.UTF-8\"")
+            appendLine("export TERM=\"xterm-256color\"")
+            appendLine("export COLORTERM=\"truecolor\"")
+            appendLine("export ANDROID_STORAGE=\"/sdcard\"")
+            appendLine("mkdir -p \"${termuxHome.absolutePath}\" \"${termuxTmp.absolutePath}\" 2>/dev/null")
+            appendLine("if [ -f \"${termuxPrefix.absolutePath}/etc/tls/cert.pem\" ]; then")
+            appendLine("  export SSL_CERT_FILE=\"${termuxPrefix.absolutePath}/etc/tls/cert.pem\"")
+            appendLine("  export GIT_SSL_CAINFO=\"${termuxPrefix.absolutePath}/etc/tls/cert.pem\"")
+            appendLine("  export CURL_CA_BUNDLE=\"${termuxPrefix.absolutePath}/etc/tls/cert.pem\"")
+            appendLine("  export NODE_EXTRA_CA_CERTS=\"${termuxPrefix.absolutePath}/etc/tls/cert.pem\"")
+            appendLine("fi")
+            appendLine("exec \"${'$'}@\"")
+        }
+        termuxEnvWrapper.writeText(envWrapper)
+        termuxEnvWrapper.setExecutable(true, false)
+
+        val compatWrapper = buildString {
+            appendLine("#!/system/bin/sh")
+            appendLine("PROOT_BIN=\"${runtimeProot.absolutePath}\"")
+            appendLine("APP_FILES=\"${context.filesDir.absolutePath}\"")
+            appendLine("APP_CACHE=\"${context.cacheDir.absolutePath}\"")
+            appendLine("HOST_PREFIX=\"${termuxPrefix.absolutePath}\"")
+            appendLine("HOST_HOME=\"${termuxHome.absolutePath}\"")
+            appendLine("HOST_TMP=\"${termuxTmp.absolutePath}\"")
+            appendLine("LEGACY_FILES=\"$LEGACY_TERMUX_FILES\"")
+            appendLine("LEGACY_CACHE=\"$LEGACY_TERMUX_CACHE\"")
+            appendLine("LEGACY_PREFIX=\"$LEGACY_TERMUX_PREFIX\"")
+            appendLine("LEGACY_HOME=\"$LEGACY_TERMUX_HOME\"")
+            appendLine("LEGACY_TMP=\"$LEGACY_TERMUX_TMP\"")
+            appendLine("COMPAT_ROOTFS=\"${termuxCompatCache.absolutePath}/rootfs\"")
+            appendLine("mkdir -p \"${termuxCompatCache.absolutePath}\" \"${termuxHome.absolutePath}\" \"${termuxTmp.absolutePath}\" 2>/dev/null")
+            appendLine("export PROOT_TMP_DIR=\"${termuxCompatCache.absolutePath}\"")
+            appendLine("export PROOT_NO_SECCOMP=1")
+            appendLine("if [ ! -x \"\${PROOT_BIN}\" ]; then")
+            appendLine("  echo \"DevPocket error: missing bundled compatibility proot at \${PROOT_BIN}\" >&2")
+            appendLine("  exit 127")
+            appendLine("fi")
+            // Create a minimal rootfs skeleton so proot can find bind mount destinations.
+            // proot with -r / fails because /data/data/com.termux doesn't exist on the real
+            // Android filesystem (our app is com.theia.mobile). By using a custom rootfs
+            // with the expected directory structure, proot can properly set up bind mounts.
+            appendLine("mkdir -p \"\${COMPAT_ROOTFS}/data/data/com.termux/files\" 2>/dev/null")
+            appendLine("mkdir -p \"\${COMPAT_ROOTFS}/data/data/com.termux/cache\" 2>/dev/null")
+            appendLine("mkdir -p \"\${COMPAT_ROOTFS}${context.filesDir.absolutePath}\" 2>/dev/null")
+            appendLine("mkdir -p \"\${COMPAT_ROOTFS}${context.cacheDir.absolutePath}\" 2>/dev/null")
+            // Set all env vars BEFORE proot exec — proot inherits them from the parent process.
+            appendLine("export PREFIX=\"\${LEGACY_PREFIX}\"")
+            appendLine("export HOME=\"\${LEGACY_HOME}\"")
+            appendLine("export TMPDIR=\"\${LEGACY_TMP}\"")
+            appendLine("export PATH=\"\${LEGACY_PREFIX}/bin:\${HOST_PREFIX}/bin:/system/bin\"")
+            appendLine("export LD_LIBRARY_PATH=\"\${LEGACY_PREFIX}/lib:\${HOST_PREFIX}/lib\"")
+            appendLine("export LANG=C.UTF-8")
+            appendLine("export LC_ALL=C.UTF-8")
+            appendLine("export TERM=xterm-256color")
+            appendLine("export COLORTERM=truecolor")
+            appendLine("export ANDROID_STORAGE=/sdcard")
+            appendLine("if [ -f \"\${HOST_PREFIX}/etc/tls/cert.pem\" ]; then")
+            appendLine("  export SSL_CERT_FILE=\"\${LEGACY_PREFIX}/etc/tls/cert.pem\"")
+            appendLine("  export GIT_SSL_CAINFO=\"\${LEGACY_PREFIX}/etc/tls/cert.pem\"")
+            appendLine("  export CURL_CA_BUNDLE=\"\${LEGACY_PREFIX}/etc/tls/cert.pem\"")
+            appendLine("  export NODE_EXTRA_CA_CERTS=\"\${LEGACY_PREFIX}/etc/tls/cert.pem\"")
+            appendLine("fi")
+            appendLine("TERMUX_UID=\$(id -u 2>/dev/null || true)")
+            appendLine("if [ -n \"\${TERMUX_UID}\" ]; then")
+            appendLine("  export TERMUX__UID=\"\${TERMUX_UID}\"")
+            appendLine("  export TERMUX__USER_ID=\"\${TERMUX_UID}\"")
+            appendLine("fi")
+            // Forward DPKG env vars from ProcessBuilder.environment() into the proot guest
+            appendLine("if [ -n \"\${DPKG_ROOT}\" ]; then export DPKG_ROOT DPKG_ADMINDIR DPKG_FORCE; fi")
+            appendLine("echo \"DevPocket: host Termux compatibility mode (launcher=\${PROOT_BIN} rootfs=\${COMPAT_ROOTFS} cmd=\$*)\" >&2")
+            // Use the custom rootfs with pre-created directory skeleton, bind real content on top.
+            // --link2symlink is needed because dpkg uses hardlinks and Android's FS may not support them.
+            appendLine("exec \"\${PROOT_BIN}\" --kill-on-exit --link2symlink -0 -r \"\${COMPAT_ROOTFS}\" \\")
+            appendLine("  -b /system -b /apex -b /dev -b /proc -b /sys -b /sdcard -b /storage \\")
+            appendLine("  -b \"${context.filesDir.absolutePath}:\${LEGACY_FILES}\" \\")
+            appendLine("  -b \"${context.cacheDir.absolutePath}:\${LEGACY_CACHE}\" \\")
+            appendLine("  -b \"${context.filesDir.absolutePath}:${context.filesDir.absolutePath}\" \\")
+            appendLine("  -b \"${context.cacheDir.absolutePath}:${context.cacheDir.absolutePath}\" \\")
+            appendLine("  -w / \\")
+            appendLine("  \"\$@\"")
+        }
+        termuxCompatWrapper.writeText(compatWrapper)
+        termuxCompatWrapper.setExecutable(true, false)
+
+        val shellWrapper = buildString {
+            appendLine("#!/system/bin/sh")
+            appendLine("APP_FILES=\"${context.filesDir.absolutePath}\"")
+            appendLine("PREFIX=\"${termuxPrefix.absolutePath}\"")
+            appendLine("TERMUX_ENV=\"${termuxEnvWrapper.absolutePath}\"")
+            appendLine("TERMUX_COMPAT=\"${termuxCompatWrapper.absolutePath}\"")
+            appendLine("LEGACY_PROOT_DISTRO=\"$LEGACY_TERMUX_PREFIX/bin/proot-distro\"")
+            appendLine("DEBIAN_ROOT=\"${debianRoot.absolutePath}\"")
+            appendLine("RUNTIME_ROOT=\"${TheiaRuntimePaths.runtimeRoot(context).absolutePath}\"")
+            appendLine("CONFIG_DIR=\"${TheiaRuntimePaths.configDir(context).absolutePath}\"")
+            appendLine("EXTENSIONS_DIR=\"${TheiaRuntimePaths.extensionsRoot(context).absolutePath}\"")
+            appendLine("if [ ! -x \"${termuxCompatWrapper.absolutePath}\" ]; then")
+            appendLine("  echo \"DevPocket error: missing Termux compatibility wrapper at ${termuxCompatWrapper.absolutePath}\" >&2")
+            appendLine("  exit 127")
+            appendLine("fi")
+            appendLine("if [ ! -x \"${termuxBin.absolutePath}/proot-distro\" ]; then")
+            appendLine("  echo \"DevPocket error: missing proot-distro at ${termuxBin.absolutePath}/proot-distro\" >&2")
+            appendLine("  exit 127")
+            appendLine("fi")
+            appendLine("if [ ! -d \"${debianRoot.absolutePath}\" ]; then")
+            appendLine("  echo \"DevPocket error: Debian rootfs is not installed yet\" >&2")
+            appendLine("  exit 127")
+            appendLine("fi")
+            appendLine("HOST_PWD=\$(pwd 2>/dev/null || printf '%s' \"${debianRoot.absolutePath}/root\")")
+            appendLine("GUEST_WD=\"/root\"")
+            appendLine("case \"\${HOST_PWD}\" in")
+            appendLine("  \"${debianRoot.absolutePath}\") GUEST_WD=\"/\" ;;")
+            appendLine("  \"${debianRoot.absolutePath}\"/*) GUEST_WD=\"/\${HOST_PWD#${debianRoot.absolutePath}/}\" ;;")
+            appendLine("  /sdcard|/sdcard/*|/storage|/storage/*) GUEST_WD=\"\${HOST_PWD}\" ;;")
+            appendLine("esac")
+            appendLine("if [ \"\$#\" -eq 0 ]; then")
+            appendLine("  set -- --login")
+            appendLine("fi")
+            appendLine("PROOT_GETCWD_SHIM=\"/opt/devpocket/bin/proot-getcwd.so\"")
+            appendLine("PROOT_GETCWD_PRELOAD=\"\"")
+            appendLine("if [ -f \"\${PROOT_GETCWD_SHIM}\" ]; then")
+            appendLine("  PROOT_GETCWD_PRELOAD=\"\${PROOT_GETCWD_SHIM}\"")
+            appendLine("fi")
+            appendLine("echo \"DevPocket: entering Debian via proot-distro (host-pwd=\${HOST_PWD} guest-pwd=\${GUEST_WD})\" >&2")
+            appendLine("exec \"${termuxCompatWrapper.absolutePath}\" \"\${LEGACY_PROOT_DISTRO}\" login --shared-tmp \\")
+            appendLine("  --bind /sdcard:/sdcard \\")
+            appendLine("  --bind /storage:/storage \\")
+            appendLine("  --bind \"\${RUNTIME_ROOT}:/opt/devpocket\" \\")
+            appendLine("  --bind \"\${CONFIG_DIR}:/opt/devpocket-config\" \\")
+            appendLine("  --bind \"\${EXTENSIONS_DIR}:/opt/devpocket-extensions\" \\")
+            appendLine("  --work-dir \"\${GUEST_WD}\" ${DEBIAN_ALIAS} -- /usr/bin/env \\")
+            appendLine("  HOME=/root USER=root LOGNAME=root TERM=xterm-256color COLORTERM=truecolor LANG=C.UTF-8 LC_ALL=C.UTF-8 ANDROID_STORAGE=/sdcard \\")
+            appendLine("  SSL_CERT_FILE=/opt/devpocket/etc/ca-certificates/cacert.pem GIT_SSL_CAINFO=/opt/devpocket/etc/ca-certificates/cacert.pem CURL_CA_BUNDLE=/opt/devpocket/etc/ca-certificates/cacert.pem NODE_EXTRA_CA_CERTS=/opt/devpocket/etc/ca-certificates/cacert.pem LD_PRELOAD=\${PROOT_GETCWD_PRELOAD} \\")
+            appendLine("  /bin/bash \"\${@}\"")
+        }
+        termuxShellWrapper.writeText(shellWrapper)
+        termuxShellWrapper.setExecutable(true, false)
+        Log.i(TAG, "Wrote Termux wrappers at ${termuxEnvWrapper.absolutePath}, ${termuxCompatWrapper.absolutePath}, and ${termuxShellWrapper.absolutePath}")
+    }
+
+    private fun termuxDpkgEnv(): Map<String, String> = mapOf(
+        "DPKG_ROOT" to LEGACY_TERMUX_PREFIX,
+        "DPKG_ADMINDIR" to "$LEGACY_TERMUX_PREFIX/var/lib/dpkg",
+        "DPKG_FORCE" to "script-chrootless"
+    )
+
+    /** DPKG env vars using the real app-prefix paths (for direct execution without proot). */
+    private fun termuxDpkgEnvLocal(): Map<String, String> = mapOf(
+        "DPKG_ROOT" to termuxPrefix.absolutePath,
+        "DPKG_ADMINDIR" to "${termuxPrefix.absolutePath}/var/lib/dpkg",
+        "DPKG_FORCE" to "script-chrootless"
+    )
+
+    private fun toCompatGuestPath(value: String): String {
+        return when {
+            value == termuxPrefix.absolutePath -> LEGACY_TERMUX_PREFIX
+            value.startsWith(termuxPrefix.absolutePath + "/") ->
+                "$LEGACY_TERMUX_PREFIX/" + value.removePrefix(termuxPrefix.absolutePath + "/")
+            value == termuxHome.absolutePath -> LEGACY_TERMUX_HOME
+            value.startsWith(termuxHome.absolutePath + "/") ->
+                "$LEGACY_TERMUX_HOME/" + value.removePrefix(termuxHome.absolutePath + "/")
+            value == termuxTmp.absolutePath -> LEGACY_TERMUX_TMP
+            value.startsWith(termuxTmp.absolutePath + "/") ->
+                "$LEGACY_TERMUX_TMP/" + value.removePrefix(termuxTmp.absolutePath + "/")
+            value == context.filesDir.absolutePath -> LEGACY_TERMUX_FILES
+            value.startsWith(context.filesDir.absolutePath + "/") ->
+                "$LEGACY_TERMUX_FILES/" + value.removePrefix(context.filesDir.absolutePath + "/")
+            value == context.cacheDir.absolutePath -> LEGACY_TERMUX_CACHE
+            value.startsWith(context.cacheDir.absolutePath + "/") ->
+                "$LEGACY_TERMUX_CACHE/" + value.removePrefix(context.cacheDir.absolutePath + "/")
+            else -> value
+        }
+    }
+
+    private fun runTermuxCompatShellCommand(
+        command: String,
+        phase: String,
+        extraEnv: Map<String, String> = emptyMap()
+    ) {
+        runTermuxCompatCommand(listOf(File(termuxBin, "bash").absolutePath, "-lc", command), phase, extraEnv)
+    }
+
+    private fun runTermuxCompatCommand(
+        command: List<String>,
+        phase: String,
+        extraEnv: Map<String, String> = emptyMap()
+    ) {
+        runTermuxCommand(command.map(::toCompatGuestPath), phase, extraEnv + termuxDpkgEnv(), termuxCompatWrapper)
+    }
+
+    private fun runTermuxShellCommand(
+        command: String,
+        phase: String,
+        extraEnv: Map<String, String> = emptyMap()
+    ) {
+        runTermuxCommand(listOf(File(termuxBin, "bash").absolutePath, "-lc", command), phase, extraEnv)
+    }
+
+    private fun runTermuxCommand(
+        command: List<String>,
+        phase: String,
+        extraEnv: Map<String, String> = emptyMap(),
+        launcher: File = termuxEnvWrapper
+    ) {
+        Log.i(TAG, "Running $phase command: ${command.joinToString(" ")}")
+
+        val builder = ProcessBuilder(listOf(launcher.absolutePath) + command)
+        builder.directory(termuxHome)
+        builder.redirectErrorStream(true)
+        builder.environment().putAll(extraEnv)
+
+        val process = builder.start()
+        rememberCommandOutput("[$phase] $ ${command.joinToString(" ")}")
+        BufferedReader(InputStreamReader(process.inputStream, StandardCharsets.UTF_8)).use { reader ->
+            var line: String?
+            while (reader.readLine().also { line = it } != null) {
+                Log.i(TAG, "[$phase] $line")
+                rememberCommandOutput("[$phase] $line")
+            }
+        }
+
+        val exitCode = process.waitFor()
+        Log.i(TAG, "$phase command exited with code $exitCode")
+        if (exitCode != 0) {
+            throw IllegalStateException(
+                "$phase command failed with exit code $exitCode\n" + recentDiagnosticsSummary()
+            )
+        }
+    }
+
+    private fun rememberCommandOutput(line: String) {
+        if (recentCommandOutput.size >= MAX_DIAGNOSTIC_LINES) {
+            recentCommandOutput.removeFirst()
+        }
+        recentCommandOutput.addLast(line)
+    }
+
+    private fun recentDiagnosticsSummary(): String {
+        if (recentCommandOutput.isEmpty()) {
+            return "No installer output was captured."
+        }
+        return recentCommandOutput.joinToString(separator = "\n")
+    }
+
+    private fun calculateSHA256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        val buffer = ByteArray(16 * 1024)
+        var bytesRead: Int
+
+        FileInputStream(file).use { input ->
+            while (input.read(buffer).also { bytesRead = it } != -1) {
+                digest.update(buffer, 0, bytesRead)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    private fun writeManifest(manifest: InstallManifest) {
+        val json = buildString {
+            appendLine("{")
+            appendLine("  \"version\": \"${manifest.version}\",")
+            appendLine("  \"bootstrapVersion\": \"${manifest.bootstrapVersion}\",")
+            appendLine("  \"installedAt\": ${manifest.installedAt},")
+            appendLine("  \"prefixPath\": \"${manifest.prefixPath}\",")
+            appendLine("  \"debianPath\": \"${manifest.debianPath}\",")
+            appendLine("  \"hostPackages\": \"${manifest.hostPackages}\",")
+            appendLine("  \"extractedSuccessfully\": ${manifest.extractedSuccessfully}")
+            appendLine("}")
+        }
+        manifestFile.writeText(json)
+        Log.i(TAG, "Wrote install manifest to ${manifestFile.absolutePath}")
+    }
+
+    private fun publishProgress(phase: String, current: Long, total: Long) {
+        val percent = if (total > 0) ((current.toFloat() / total) * 100).toInt() else 0
+        stateManager.setInstallProgress(percent.coerceIn(0, 100))
+        progressCallback?.invoke(InstallProgress(phase, current, total, percent.coerceIn(0, 100)))
     }
 }
