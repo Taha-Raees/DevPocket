@@ -271,34 +271,46 @@ class BootstrapInstallerService(private val context: Context) {
         publishProgress("bootstrap-configuring", 0, 100)
         secondStageScript.setExecutable(true, false)
 
-        // Primary approach: run the second-stage script directly via env wrapper (no proot).
-        // patchTextPrefixReferences() already rewrote the script to use app-prefix paths,
-        // and Termux binaries use Bionic (/system/bin/linker64) so they execute natively.
-        // LD_LIBRARY_PATH from the env wrapper handles shared library resolution.
+        // Primary approach: run via proot compat wrapper so dpkg's compiled-in legacy paths
+        // (e.g. /data/data/com.termux/files/usr/etc/dpkg/dpkg.cfg.d) resolve through the
+        // bind mount to the actual app-prefix location.
+        try {
+            runTermuxCompatCommand(
+                listOf(bash.absolutePath, secondStageScript.absolutePath),
+                "bootstrap-configuring",
+                termuxDpkgEnv()
+            )
+            publishProgress("bootstrap-configuring", 100, 100)
+            return
+        } catch (e: Exception) {
+            Log.w(TAG, "Proot compat second-stage failed (${e.message}); trying direct fallback")
+        }
+
+        // Fallback: run directly via env wrapper (no proot). This works if the script's
+        // text was patched to app-prefix paths, but dpkg binary calls may still fail
+        // on hardcoded config paths.
         try {
             runTermuxCommand(
                 listOf(bash.absolutePath, secondStageScript.absolutePath),
-                "bootstrap-configuring",
+                "bootstrap-configuring-direct",
                 termuxDpkgEnvLocal()
             )
             publishProgress("bootstrap-configuring", 100, 100)
             return
         } catch (e: Exception) {
-            Log.w(TAG, "Direct second-stage execution failed (${e.message}); trying fallback")
+            Log.w(TAG, "Direct second-stage execution also failed (${e.message}); creating lock")
         }
 
-        // Fallback: skip the second-stage script and run dpkg --configure manually.
-        // The important state (dpkg dirs, status file, apt config) is already created
-        // by ensureTermuxPackageManagerDirectories().
-        Log.i(TAG, "Fallback: creating second-stage lock and running dpkg --configure -a")
+        // Last resort: skip the second-stage and run dpkg --configure manually.
+        Log.i(TAG, "Last resort: creating second-stage lock and running dpkg --configure -a")
         secondStageLock.parentFile?.mkdirs()
         secondStageLock.writeText("skipped-by-devpocket-fallback")
         try {
-            runTermuxCommand(
+            runTermuxCompatCommand(
                 listOf(bash.absolutePath, "-c",
                     "dpkg --configure -a --force-confnew --force-script-chrootless 2>/dev/null || true"),
                 "bootstrap-dpkg-configure",
-                termuxDpkgEnvLocal()
+                termuxDpkgEnv()
             )
         } catch (e: Exception) {
             Log.w(TAG, "dpkg --configure fallback failed (non-fatal): ${e.message}")
@@ -579,13 +591,13 @@ class BootstrapInstallerService(private val context: Context) {
             return
         }
 
-        // Pre-flight: verify the proot compat wrapper works before running real commands
+        // Pre-flight: verify the proot compat wrapper works with Termux bash (not just a system binary)
         try {
             runTermuxCompatCommand(
-                listOf("/system/bin/echo", "proot-compat-test-ok"),
+                listOf(File(termuxBin, "bash").absolutePath, "-c", "echo proot-compat-test-ok"),
                 "proot-preflight"
             )
-            Log.i(TAG, "Proot compatibility wrapper pre-flight passed")
+            Log.i(TAG, "Proot compatibility wrapper pre-flight passed (Termux bash works under proot)")
         } catch (e: Exception) {
             Log.e(TAG, "Proot compatibility wrapper pre-flight FAILED: ${e.message}. " +
                 "proot=${runtimeProot.absolutePath} exists=${runtimeProot.exists()} exec=${runtimeProot.canExecute()}")
@@ -775,10 +787,10 @@ class BootstrapInstallerService(private val context: Context) {
             // Forward DPKG env vars from ProcessBuilder.environment() into the proot guest
             appendLine("if [ -n \"\${DPKG_ROOT}\" ]; then export DPKG_ROOT DPKG_ADMINDIR DPKG_FORCE; fi")
             appendLine("echo \"DevPocket: host Termux compatibility mode (launcher=\${PROOT_BIN} host-prefix=\${HOST_PREFIX} legacy-prefix=\${LEGACY_PREFIX} cmd=\$*)\" >&2")
-            // Removed: --link2symlink (not needed, may interfere with path resolution)
             // Removed: redundant self-binds (-b $APP_FILES:$APP_FILES) that confused proot path table
             // Removed: intermediate /system/bin/sh -c wrapper — env vars are inherited directly
-            appendLine("exec \"\${PROOT_BIN}\" --kill-on-exit -0 -r / \\")
+            // --link2symlink is needed because dpkg uses hardlinks and Android's FS may not support them
+            appendLine("exec \"\${PROOT_BIN}\" --kill-on-exit --link2symlink -0 -r / \\")
             appendLine("  -b /system -b /apex -b /dev -b /proc -b /sys -b /sdcard -b /storage \\")
             appendLine("  -b \"${context.filesDir.absolutePath}:\${LEGACY_FILES}\" \\")
             appendLine("  -b \"${context.cacheDir.absolutePath}:\${LEGACY_CACHE}\" \\")
