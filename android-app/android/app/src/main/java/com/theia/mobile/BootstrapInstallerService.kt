@@ -37,7 +37,7 @@ class BootstrapInstallerService(private val context: Context) {
         private const val LEGACY_TERMUX_PREFIX = "/data/data/com.termux/files/usr"
         private const val LEGACY_TERMUX_HOME = "/data/data/com.termux/files/home"
         private const val LEGACY_TERMUX_TMP = "/data/data/com.termux/files/usr/tmp"
-        private const val MAX_DIAGNOSTIC_LINES = 30
+        private const val MAX_DIAGNOSTIC_LINES = 80
 
         private data class BootstrapArchive(
             val arch: String,
@@ -262,13 +262,47 @@ class BootstrapInstallerService(private val context: Context) {
             return
         }
 
+        val bash = File(termuxBin, "bash")
+        Log.i(TAG, "Second-stage diagnostics: " +
+            "bash=${bash.absolutePath} exists=${bash.exists()} exec=${bash.canExecute()} size=${bash.length()} " +
+            "script=${secondStageScript.absolutePath} exists=${secondStageScript.exists()} size=${secondStageScript.length()} " +
+            "proot=${runtimeProot.absolutePath} exists=${runtimeProot.exists()}")
+
         publishProgress("bootstrap-configuring", 0, 100)
         secondStageScript.setExecutable(true, false)
-        runTermuxCompatCommand(
-            listOf(File(termuxBin, "bash").absolutePath, secondStageScript.absolutePath),
-            "bootstrap-configuring",
-            termuxDpkgEnv()
-        )
+
+        // Primary approach: run the second-stage script directly via env wrapper (no proot).
+        // patchTextPrefixReferences() already rewrote the script to use app-prefix paths,
+        // and Termux binaries use Bionic (/system/bin/linker64) so they execute natively.
+        // LD_LIBRARY_PATH from the env wrapper handles shared library resolution.
+        try {
+            runTermuxCommand(
+                listOf(bash.absolutePath, secondStageScript.absolutePath),
+                "bootstrap-configuring",
+                termuxDpkgEnvLocal()
+            )
+            publishProgress("bootstrap-configuring", 100, 100)
+            return
+        } catch (e: Exception) {
+            Log.w(TAG, "Direct second-stage execution failed (${e.message}); trying fallback")
+        }
+
+        // Fallback: skip the second-stage script and run dpkg --configure manually.
+        // The important state (dpkg dirs, status file, apt config) is already created
+        // by ensureTermuxPackageManagerDirectories().
+        Log.i(TAG, "Fallback: creating second-stage lock and running dpkg --configure -a")
+        secondStageLock.parentFile?.mkdirs()
+        secondStageLock.writeText("skipped-by-devpocket-fallback")
+        try {
+            runTermuxCommand(
+                listOf(bash.absolutePath, "-c",
+                    "dpkg --configure -a --force-confnew --force-script-chrootless 2>/dev/null || true"),
+                "bootstrap-dpkg-configure",
+                termuxDpkgEnvLocal()
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "dpkg --configure fallback failed (non-fatal): ${e.message}")
+        }
         publishProgress("bootstrap-configuring", 100, 100)
     }
 
@@ -322,6 +356,9 @@ class BootstrapInstallerService(private val context: Context) {
         aptConf.writeText(
             buildString {
                 appendLine("APT::Sandbox::User \"root\";")
+                // Set the base Dir so apt resolves all relative paths under the legacy prefix
+                // (used when running through the proot compat wrapper)
+                appendLine("Dir \"$LEGACY_TERMUX_PREFIX\";")
                 appendLine("Dir::Bin::dpkg \"$LEGACY_TERMUX_PREFIX/bin/dpkg\";")
             }
         )
@@ -542,12 +579,41 @@ class BootstrapInstallerService(private val context: Context) {
             return
         }
 
+        // Pre-flight: verify the proot compat wrapper works before running real commands
+        try {
+            runTermuxCompatCommand(
+                listOf("/system/bin/echo", "proot-compat-test-ok"),
+                "proot-preflight"
+            )
+            Log.i(TAG, "Proot compatibility wrapper pre-flight passed")
+        } catch (e: Exception) {
+            Log.e(TAG, "Proot compatibility wrapper pre-flight FAILED: ${e.message}. " +
+                "proot=${runtimeProot.absolutePath} exists=${runtimeProot.exists()} exec=${runtimeProot.canExecute()}")
+            throw IllegalStateException("Proot compatibility wrapper is not functional: ${e.message}", e)
+        }
+
         publishProgress("termux-updating", 0, 100)
-        runTermuxCompatShellCommand("pkg update -y", "termux-updating", termuxDpkgEnv())
+        try {
+            runTermuxCompatShellCommand("pkg update -y", "termux-updating", termuxDpkgEnv())
+        } catch (e: Exception) {
+            Log.w(TAG, "pkg update failed on first attempt: ${e.message}; retrying once")
+            runTermuxCompatShellCommand("pkg update -y", "termux-updating", termuxDpkgEnv())
+        }
         publishProgress("termux-updating", 100, 100)
 
+        // Install packages individually for better error isolation
+        val packages = TERMUX_PACKAGES.split(" ").filter { it.isNotBlank() }
         publishProgress("termux-installing-packages", 0, 100)
-        runTermuxCompatShellCommand("pkg install -y $TERMUX_PACKAGES", "termux-installing-packages", termuxDpkgEnv())
+        for ((index, pkg) in packages.withIndex()) {
+            val pkgBin = File(termuxBin, pkg)
+            if (pkgBin.exists()) {
+                Log.i(TAG, "Package '$pkg' already present at ${pkgBin.absolutePath}")
+            } else {
+                runTermuxCompatShellCommand("pkg install -y $pkg", "termux-installing-$pkg", termuxDpkgEnv())
+            }
+            publishProgress("termux-installing-packages",
+                ((index + 1).toLong() * 100) / packages.size, 100)
+        }
         publishProgress("termux-installing-packages", 100, 100)
 
         patchTextPrefixReferences()
@@ -683,34 +749,41 @@ class BootstrapInstallerService(private val context: Context) {
             appendLine("  echo \"DevPocket error: missing bundled compatibility proot at \${PROOT_BIN}\" >&2")
             appendLine("  exit 127")
             appendLine("fi")
-            appendLine("export TERMUX_UID=\$(id -u 2>/dev/null || true)")
+            // Set all env vars BEFORE proot exec — proot inherits them from the parent process.
+            // This eliminates the fragile intermediate /system/bin/sh -c wrapper.
+            appendLine("export PREFIX=\"\${LEGACY_PREFIX}\"")
+            appendLine("export HOME=\"\${LEGACY_HOME}\"")
+            appendLine("export TMPDIR=\"\${LEGACY_TMP}\"")
+            appendLine("export PATH=\"\${LEGACY_PREFIX}/bin:\${HOST_PREFIX}/bin:/system/bin\"")
+            appendLine("export LD_LIBRARY_PATH=\"\${LEGACY_PREFIX}/lib:\${HOST_PREFIX}/lib\"")
+            appendLine("export LANG=C.UTF-8")
+            appendLine("export LC_ALL=C.UTF-8")
+            appendLine("export TERM=xterm-256color")
+            appendLine("export COLORTERM=truecolor")
+            appendLine("export ANDROID_STORAGE=/sdcard")
+            appendLine("if [ -f \"\${LEGACY_PREFIX}/etc/tls/cert.pem\" ]; then")
+            appendLine("  export SSL_CERT_FILE=\"\${LEGACY_PREFIX}/etc/tls/cert.pem\"")
+            appendLine("  export GIT_SSL_CAINFO=\"\${LEGACY_PREFIX}/etc/tls/cert.pem\"")
+            appendLine("  export CURL_CA_BUNDLE=\"\${LEGACY_PREFIX}/etc/tls/cert.pem\"")
+            appendLine("  export NODE_EXTRA_CA_CERTS=\"\${LEGACY_PREFIX}/etc/tls/cert.pem\"")
+            appendLine("fi")
+            appendLine("TERMUX_UID=\$(id -u 2>/dev/null || true)")
+            appendLine("if [ -n \"\${TERMUX_UID}\" ]; then")
+            appendLine("  export TERMUX__UID=\"\${TERMUX_UID}\"")
+            appendLine("  export TERMUX__USER_ID=\"\${TERMUX_UID}\"")
+            appendLine("fi")
+            // Forward DPKG env vars from ProcessBuilder.environment() into the proot guest
+            appendLine("if [ -n \"\${DPKG_ROOT}\" ]; then export DPKG_ROOT DPKG_ADMINDIR DPKG_FORCE; fi")
             appendLine("echo \"DevPocket: host Termux compatibility mode (launcher=\${PROOT_BIN} host-prefix=\${HOST_PREFIX} legacy-prefix=\${LEGACY_PREFIX} cmd=\$*)\" >&2")
-            appendLine("exec \"\${PROOT_BIN}\" --kill-on-exit --link2symlink -0 -r / \\")
+            // Removed: --link2symlink (not needed, may interfere with path resolution)
+            // Removed: redundant self-binds (-b $APP_FILES:$APP_FILES) that confused proot path table
+            // Removed: intermediate /system/bin/sh -c wrapper — env vars are inherited directly
+            appendLine("exec \"\${PROOT_BIN}\" --kill-on-exit -0 -r / \\")
             appendLine("  -b /system -b /apex -b /dev -b /proc -b /sys -b /sdcard -b /storage \\")
-            appendLine("  -b \"${context.filesDir.absolutePath}:${context.filesDir.absolutePath}\" \\")
-            appendLine("  -b \"${context.cacheDir.absolutePath}:${context.cacheDir.absolutePath}\" \\")
             appendLine("  -b \"${context.filesDir.absolutePath}:\${LEGACY_FILES}\" \\")
             appendLine("  -b \"${context.cacheDir.absolutePath}:\${LEGACY_CACHE}\" \\")
             appendLine("  -w / \\")
-            appendLine("  /system/bin/sh -c '")
-            appendLine("    export PREFIX=\"\${LEGACY_PREFIX}\"")
-            appendLine("    export HOME=\"\${LEGACY_HOME}\"")
-            appendLine("    export TMPDIR=\"\${LEGACY_TMP}\"")
-            appendLine("    export PATH=\"\${LEGACY_PREFIX}/bin:\${HOST_PREFIX}/bin:/system/bin\"")
-            appendLine("    export LD_LIBRARY_PATH=\"\${LEGACY_PREFIX}/lib:\${HOST_PREFIX}/lib\"")
-            appendLine("    export LANG=C.UTF-8 LC_ALL=C.UTF-8 TERM=xterm-256color COLORTERM=truecolor ANDROID_STORAGE=/sdcard")
-            appendLine("    if [ -f \"\${LEGACY_PREFIX}/etc/tls/cert.pem\" ]; then")
-            appendLine("      export SSL_CERT_FILE=\"\${LEGACY_PREFIX}/etc/tls/cert.pem\"")
-            appendLine("      export GIT_SSL_CAINFO=\"\${LEGACY_PREFIX}/etc/tls/cert.pem\"")
-            appendLine("      export CURL_CA_BUNDLE=\"\${LEGACY_PREFIX}/etc/tls/cert.pem\"")
-            appendLine("      export NODE_EXTRA_CA_CERTS=\"\${LEGACY_PREFIX}/etc/tls/cert.pem\"")
-            appendLine("    fi")
-            appendLine("    if [ -n \"\${TERMUX_UID}\" ]; then")
-            appendLine("      export TERMUX__UID=\"\${TERMUX_UID}\"")
-            appendLine("      export TERMUX__USER_ID=\"\${TERMUX_UID}\"")
-            appendLine("    fi")
-            appendLine("    exec \"\$@\"")
-            appendLine("  ' _ \"\$@\"")
+            appendLine("  \"\$@\"")
         }
         termuxCompatWrapper.writeText(compatWrapper)
         termuxCompatWrapper.setExecutable(true, false)
@@ -773,6 +846,13 @@ class BootstrapInstallerService(private val context: Context) {
     private fun termuxDpkgEnv(): Map<String, String> = mapOf(
         "DPKG_ROOT" to LEGACY_TERMUX_PREFIX,
         "DPKG_ADMINDIR" to "$LEGACY_TERMUX_PREFIX/var/lib/dpkg",
+        "DPKG_FORCE" to "script-chrootless"
+    )
+
+    /** DPKG env vars using the real app-prefix paths (for direct execution without proot). */
+    private fun termuxDpkgEnvLocal(): Map<String, String> = mapOf(
+        "DPKG_ROOT" to termuxPrefix.absolutePath,
+        "DPKG_ADMINDIR" to "${termuxPrefix.absolutePath}/var/lib/dpkg",
         "DPKG_FORCE" to "script-chrootless"
     )
 
