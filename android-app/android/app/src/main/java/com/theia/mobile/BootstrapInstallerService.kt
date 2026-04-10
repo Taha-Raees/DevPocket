@@ -754,6 +754,7 @@ class BootstrapInstallerService(private val context: Context) {
             appendLine("LEGACY_PREFIX=\"$LEGACY_TERMUX_PREFIX\"")
             appendLine("LEGACY_HOME=\"$LEGACY_TERMUX_HOME\"")
             appendLine("LEGACY_TMP=\"$LEGACY_TERMUX_TMP\"")
+            appendLine("COMPAT_ROOTFS=\"${termuxCompatCache.absolutePath}/rootfs\"")
             appendLine("mkdir -p \"${termuxCompatCache.absolutePath}\" \"${termuxHome.absolutePath}\" \"${termuxTmp.absolutePath}\" 2>/dev/null")
             appendLine("export PROOT_TMP_DIR=\"${termuxCompatCache.absolutePath}\"")
             appendLine("export PROOT_NO_SECCOMP=1")
@@ -761,8 +762,15 @@ class BootstrapInstallerService(private val context: Context) {
             appendLine("  echo \"DevPocket error: missing bundled compatibility proot at \${PROOT_BIN}\" >&2")
             appendLine("  exit 127")
             appendLine("fi")
+            // Create a minimal rootfs skeleton so proot can find bind mount destinations.
+            // proot with -r / fails because /data/data/com.termux doesn't exist on the real
+            // Android filesystem (our app is com.theia.mobile). By using a custom rootfs
+            // with the expected directory structure, proot can properly set up bind mounts.
+            appendLine("mkdir -p \"\${COMPAT_ROOTFS}/data/data/com.termux/files\" 2>/dev/null")
+            appendLine("mkdir -p \"\${COMPAT_ROOTFS}/data/data/com.termux/cache\" 2>/dev/null")
+            appendLine("mkdir -p \"\${COMPAT_ROOTFS}${context.filesDir.absolutePath}\" 2>/dev/null")
+            appendLine("mkdir -p \"\${COMPAT_ROOTFS}${context.cacheDir.absolutePath}\" 2>/dev/null")
             // Set all env vars BEFORE proot exec — proot inherits them from the parent process.
-            // This eliminates the fragile intermediate /system/bin/sh -c wrapper.
             appendLine("export PREFIX=\"\${LEGACY_PREFIX}\"")
             appendLine("export HOME=\"\${LEGACY_HOME}\"")
             appendLine("export TMPDIR=\"\${LEGACY_TMP}\"")
@@ -773,7 +781,7 @@ class BootstrapInstallerService(private val context: Context) {
             appendLine("export TERM=xterm-256color")
             appendLine("export COLORTERM=truecolor")
             appendLine("export ANDROID_STORAGE=/sdcard")
-            appendLine("if [ -f \"\${LEGACY_PREFIX}/etc/tls/cert.pem\" ]; then")
+            appendLine("if [ -f \"\${HOST_PREFIX}/etc/tls/cert.pem\" ]; then")
             appendLine("  export SSL_CERT_FILE=\"\${LEGACY_PREFIX}/etc/tls/cert.pem\"")
             appendLine("  export GIT_SSL_CAINFO=\"\${LEGACY_PREFIX}/etc/tls/cert.pem\"")
             appendLine("  export CURL_CA_BUNDLE=\"\${LEGACY_PREFIX}/etc/tls/cert.pem\"")
@@ -786,14 +794,15 @@ class BootstrapInstallerService(private val context: Context) {
             appendLine("fi")
             // Forward DPKG env vars from ProcessBuilder.environment() into the proot guest
             appendLine("if [ -n \"\${DPKG_ROOT}\" ]; then export DPKG_ROOT DPKG_ADMINDIR DPKG_FORCE; fi")
-            appendLine("echo \"DevPocket: host Termux compatibility mode (launcher=\${PROOT_BIN} host-prefix=\${HOST_PREFIX} legacy-prefix=\${LEGACY_PREFIX} cmd=\$*)\" >&2")
-            // Removed: redundant self-binds (-b $APP_FILES:$APP_FILES) that confused proot path table
-            // Removed: intermediate /system/bin/sh -c wrapper — env vars are inherited directly
-            // --link2symlink is needed because dpkg uses hardlinks and Android's FS may not support them
-            appendLine("exec \"\${PROOT_BIN}\" --kill-on-exit --link2symlink -0 -r / \\")
+            appendLine("echo \"DevPocket: host Termux compatibility mode (launcher=\${PROOT_BIN} rootfs=\${COMPAT_ROOTFS} cmd=\$*)\" >&2")
+            // Use the custom rootfs with pre-created directory skeleton, bind real content on top.
+            // --link2symlink is needed because dpkg uses hardlinks and Android's FS may not support them.
+            appendLine("exec \"\${PROOT_BIN}\" --kill-on-exit --link2symlink -0 -r \"\${COMPAT_ROOTFS}\" \\")
             appendLine("  -b /system -b /apex -b /dev -b /proc -b /sys -b /sdcard -b /storage \\")
             appendLine("  -b \"${context.filesDir.absolutePath}:\${LEGACY_FILES}\" \\")
             appendLine("  -b \"${context.cacheDir.absolutePath}:\${LEGACY_CACHE}\" \\")
+            appendLine("  -b \"${context.filesDir.absolutePath}:${context.filesDir.absolutePath}\" \\")
+            appendLine("  -b \"${context.cacheDir.absolutePath}:${context.cacheDir.absolutePath}\" \\")
             appendLine("  -w / \\")
             appendLine("  \"\$@\"")
         }
