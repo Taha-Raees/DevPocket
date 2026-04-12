@@ -9,6 +9,7 @@ import java.io.BufferedReader
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.io.IOException
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
@@ -868,51 +869,9 @@ class BootstrapInstallerService(private val context: Context) {
         }
         publishProgress("termux-installing-packages", 90, 100)
 
-        // Step 4: Verify all required binaries exist; retry with a direct apt-get install
-        // if any are missing (e.g. the download-only step was partial due to a stale cache).
-        val expectedBinaries = mapOf(
-            "proot" to "proot",
-            "proot-distro" to "proot-distro",
-            "nodejs" to "node",
-            "npm" to "npm"
-        )
-
-        val missingAfterExtract = packages.filter { pkg ->
-            val bin = expectedBinaries[pkg] ?: return@filter false
-            !File(termuxBin, bin).exists()
-        }
-        if (missingAfterExtract.isNotEmpty()) {
-            Log.w(TAG, "Missing after native extract: $missingAfterExtract — trying direct apt-get install")
-            try {
-                runTermuxCompatShellCommand(
-                    "apt-get -o Dpkg::Use-Pty=0 -y --allow-unauthenticated install ${missingAfterExtract.joinToString(" ")}",
-                    "termux-fallback-install"
-                )
-            } catch (e: Exception) {
-                Log.w(TAG, "Fallback apt-get install failed (${e.message}); trying dpkg --configure again")
-                try {
-                    runTermuxCompatShellCommand("dpkg --configure -a --force-all", "termux-dpkg-configure-retry")
-                } catch (e2: Exception) {
-                    Log.w(TAG, "dpkg configure retry: ${e2.message}")
-                }
-            }
-        }
-
-        for (pkg in packages) {
-            val binName = expectedBinaries[pkg]
-            if (binName != null) {
-                val pkgBin = File(termuxBin, binName)
-                if (!pkgBin.exists()) {
-                    Log.e(TAG, "Package '$pkg' binary ($binName) not found at ${pkgBin.absolutePath}")
-                    throw IllegalStateException(
-                        "Package '$pkg' failed to install: ${pkgBin.absolutePath} not found"
-                    )
-                }
-                Log.i(TAG, "Verified package '$pkg' at ${pkgBin.absolutePath}")
-            } else {
-                Log.i(TAG, "Skipping binary verification for library/utility package '$pkg'")
-            }
-        }
+        // Step 4: Seed required binaries from bundled assets if apt install was partial/failed.
+        // This makes bootstrap reliable on all devices regardless of apt/dpkg state.
+        seedRequiredBinariesFromAssets()
         publishProgress("termux-installing-packages", 100, 100)
 
         // Restore tar after we natively bypassed dpkg-deb issues,
@@ -922,21 +881,84 @@ class BootstrapInstallerService(private val context: Context) {
             tarRealFile.renameTo(tarFile)
         }
 
-        // Replace the Termux-installed proot with our bundled runtime proot.
-        // The Termux proot is a dynamically-linked ELF with hardcoded
-        // /data/data/com.termux paths that can't be text-patched. It also
-        // depends on libtalloc.so.2 which may not be in LD_LIBRARY_PATH.
-        // Our runtime proot is statically linked and has no hardcoded paths.
-        val termuxProot = File(termuxBin, "proot")
-        if (runtimeProot.exists() && termuxProot.exists()) {
-            termuxProot.delete()
-            runtimeProot.copyTo(termuxProot, overwrite = true)
-            termuxProot.setExecutable(true, false)
-            Log.i(TAG, "Replaced Termux proot with runtime proot at ${termuxProot.absolutePath}")
-        }
-
         patchTextPrefixReferences()
         markExecutables(termuxPrefix)
+    }
+
+    /**
+     * Seeds proot, proot-distro, and node into the Termux prefix from bundled/downloaded sources.
+     * Called after apt-get install so apt gets first crack, but this guarantees the binaries
+     * are present even when apt/dpkg fails (wrong uid, broken dpkg state, no network, etc.).
+     *
+     * - proot     : copied from the bundled statically-linked runtime binary (always works)
+     * - node      : copied from the bundled runtime binary (always works)
+     * - proot-distro : shell script downloaded from GitHub (tiny text file, one URL)
+     */
+    private fun seedRequiredBinariesFromAssets() {
+        // ── proot ──────────────────────────────────────────────────────────────────────
+        val termuxProot = File(termuxBin, "proot")
+        if (runtimeProot.exists()) {
+            runtimeProot.copyTo(termuxProot, overwrite = true)
+            termuxProot.setExecutable(true, false)
+            Log.i(TAG, "Seeded proot from runtime: ${termuxProot.absolutePath}")
+        } else {
+            Log.e(TAG, "Runtime proot missing — cannot seed proot")
+            throw IllegalStateException("Bundled proot binary not found at ${runtimeProot.absolutePath}")
+        }
+
+        // ── node ───────────────────────────────────────────────────────────────────────
+        // The runtime has node (wrapper script) and node.real (ELF). Copy the wrapper so
+        // LD_LIBRARY_PATH and LD_PRELOAD are handled correctly when run outside proot.
+        val termuxNode = File(termuxBin, "node")
+        val runtimeBin = File(TheiaRuntimePaths.runtimeRoot(context), "bin")
+        val runtimeNodeWrapper = File(runtimeBin, "node")
+        val runtimeNodeReal    = File(runtimeBin, "node.real")
+        if (runtimeNodeWrapper.exists()) {
+            runtimeNodeWrapper.copyTo(termuxNode, overwrite = true)
+            termuxNode.setExecutable(true, false)
+            // node.real must live next to the wrapper so exec "${SELF_DIR}/node.real" works
+            if (runtimeNodeReal.exists()) {
+                val termuxNodeReal = File(termuxBin, "node.real")
+                if (!termuxNodeReal.exists()) {
+                    runtimeNodeReal.copyTo(termuxNodeReal, overwrite = false)
+                    termuxNodeReal.setExecutable(true, false)
+                }
+            }
+            Log.i(TAG, "Seeded node from runtime: ${termuxNode.absolutePath}")
+        } else if (!termuxNode.exists()) {
+            Log.e(TAG, "Runtime node wrapper missing and apt did not install node")
+            throw IllegalStateException("Node binary not available — runtime wrapper missing and apt install failed")
+        }
+
+        // ── proot-distro ───────────────────────────────────────────────────────────────
+        // proot-distro is a plain bash script (~100 KB). Download it from GitHub if apt
+        // did not install it. This is the last piece we cannot bundle (size + licensing).
+        val termuxProotDistro = File(termuxBin, "proot-distro")
+        if (!termuxProotDistro.exists()) {
+            Log.i(TAG, "proot-distro not installed by apt — downloading from GitHub")
+            try {
+                val url = java.net.URL(
+                    "https://raw.githubusercontent.com/termux/proot-distro/master/proot-distro.sh"
+                )
+                val conn = url.openConnection() as java.net.HttpURLConnection
+                conn.connectTimeout = 15_000
+                conn.readTimeout    = 30_000
+                conn.connect()
+                if (conn.responseCode == 200) {
+                    termuxProotDistro.writeBytes(conn.inputStream.readBytes())
+                    termuxProotDistro.setExecutable(true, false)
+                    Log.i(TAG, "Downloaded proot-distro (${termuxProotDistro.length()} bytes)")
+                } else {
+                    throw IOException("HTTP ${conn.responseCode} downloading proot-distro")
+                }
+                conn.disconnect()
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to download proot-distro: ${e.message}")
+                throw IllegalStateException("proot-distro unavailable: apt install failed and download failed — check network", e)
+            }
+        } else {
+            Log.i(TAG, "proot-distro already present at ${termuxProotDistro.absolutePath}")
+        }
     }
 
     private fun ensureDebianInstalled() {
