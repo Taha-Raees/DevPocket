@@ -750,12 +750,32 @@ class BootstrapInstallerService(private val context: Context) {
             throw IllegalStateException("Proot compatibility wrapper is not functional: ${e.message}", e)
         }
 
+        // Clean up any dpkg state left by a partial second-stage run (e.g. when proot's
+        // uid spoofing (-0) fails on some devices and the second-stage script exits early
+        // on the uid check). Without this, apt update returns exit code 100 (dpkg error).
+        try {
+            runTermuxCompatShellCommand(
+                "dpkg --configure -a --force-all 2>/dev/null || true",
+                "termux-dpkg-configure-pre-update",
+                termuxDpkgEnv()
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Pre-update dpkg configure failed (non-fatal): ${e.message}")
+        }
+
         publishProgress("termux-updating", 0, 100)
         try {
             runTermuxCompatShellCommand("apt -o Acquire::AllowInsecureRepositories=true update -y", "termux-updating", termuxDpkgEnv())
         } catch (e: Exception) {
-            Log.w(TAG, "apt update failed on first attempt: ${e.message}; retrying once")
-            runTermuxCompatShellCommand("apt -o Acquire::AllowInsecureRepositories=true update -y", "termux-updating", termuxDpkgEnv())
+            Log.w(TAG, "apt update attempt 1 failed: ${e.message}; retrying")
+            try {
+                runTermuxCompatShellCommand("apt -o Acquire::AllowInsecureRepositories=true update -y", "termux-updating", termuxDpkgEnv())
+            } catch (e2: Exception) {
+                // apt update failure is non-fatal — the package cache may be stale but
+                // apt-get -d (download-only) in the next step often still succeeds with
+                // the existing lists. Log and continue rather than aborting onboarding.
+                Log.w(TAG, "apt update failed on both attempts (continuing): ${e2.message}")
+            }
         }
         publishProgress("termux-updating", 100, 100)
 
