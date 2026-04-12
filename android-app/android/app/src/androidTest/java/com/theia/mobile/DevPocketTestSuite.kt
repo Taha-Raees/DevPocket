@@ -3,6 +3,7 @@ package com.theia.mobile
 import android.content.Context
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import java.io.File
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -97,5 +98,65 @@ class DevPocketTestSuite {
         assertNotNull(disk.components)
         assertTrue(memory.usagePercent in 0.0..100.0)
         assertTrue(memory.maxMemoryBytes > 0)
+    }
+
+    @Test
+    fun shellWrapper_pinsGitToRootGitconfig() {
+        val installer = BootstrapInstallerService(context)
+        val writeWrapperScripts = BootstrapInstallerService::class.java.getDeclaredMethod("writeWrapperScripts")
+        writeWrapperScripts.isAccessible = true
+
+        writeWrapperScripts.invoke(installer)
+
+        val shellWrapper = TheiaRuntimePaths.termuxShellWrapper(context)
+        assertTrue(shellWrapper.exists())
+
+        val shellScript = shellWrapper.readText()
+        assertTrue(shellScript.contains("GIT_CONFIG_NOSYSTEM=1"))
+        assertTrue(shellScript.contains("GIT_CONFIG_GLOBAL=/root/.gitconfig"))
+        assertTrue(shellScript.contains("HOST_PWD_ORIGINAL="))
+        assertTrue(shellScript.contains("APP_FILES_ALIAS="))
+    }
+
+    @Test
+    fun ensureRootGitConfig_createsPlaceholderWhenMissing() {
+        val installer = BootstrapInstallerService(context)
+        val ensureRootGitConfig = BootstrapInstallerService::class.java.getDeclaredMethod("ensureRootGitConfig", File::class.java)
+        ensureRootGitConfig.isAccessible = true
+
+        val rootHome = File(context.cacheDir, "devpocket-test-root-home")
+        rootHome.deleteRecursively()
+        rootHome.mkdirs()
+
+        try {
+            ensureRootGitConfig.invoke(installer, rootHome)
+
+            val gitConfig = File(rootHome, ".gitconfig")
+            assertTrue(gitConfig.exists())
+            assertTrue(gitConfig.readText().contains("DevPocket Git config placeholder"))
+        } finally {
+            rootHome.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun hasDebianGitBinary_detectsGitUnderUsrBin() {
+        val installer = BootstrapInstallerService(context)
+        val hasDebianGitBinary = BootstrapInstallerService::class.java.getDeclaredMethod("hasDebianGitBinary", File::class.java)
+        hasDebianGitBinary.isAccessible = true
+
+        val rootFs = File(context.cacheDir, "devpocket-test-rootfs")
+        rootFs.deleteRecursively()
+        File(rootFs, "usr/bin").mkdirs()
+
+        try {
+            assertEquals(false, hasDebianGitBinary.invoke(installer, rootFs))
+
+            File(rootFs, "usr/bin/git").writeText("#!/bin/sh\n")
+
+            assertEquals(true, hasDebianGitBinary.invoke(installer, rootFs))
+        } finally {
+            rootFs.deleteRecursively()
+        }
     }
 }

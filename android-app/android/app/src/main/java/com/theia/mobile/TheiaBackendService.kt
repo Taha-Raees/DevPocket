@@ -132,6 +132,11 @@ class TheiaBackendService : Service() {
 
     @Throws(IOException::class)
     private fun createProcessBuilder(port: Int): ProcessBuilder {
+        val installer = BootstrapInstallerService(this)
+        if (!installer.ensureRuntimeCompatibility()) {
+            logLine("Runtime compatibility refresh failed; continuing with existing shell/runtime files")
+        }
+
         val termuxPrefix = TheiaRuntimePaths.termuxPrefix(this)
         val termuxHome = TheiaRuntimePaths.termuxHome(this)
         val termuxTmp = TheiaRuntimePaths.termuxTmp(this)

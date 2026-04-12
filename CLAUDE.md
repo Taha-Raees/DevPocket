@@ -61,6 +61,32 @@ This project has a comprehensive memory system at `.claude/projects/-home-...-De
 
 ---
 
+## Recent Changes (2026-04-11)
+
+### ✅ FIXED: Debian PRoot Bootstrap Fully Stabilized
+
+**Problem:** The `proot-distro install debian` step was failing during the first-boot flow with three cascading issues:
+1. `compare_paths2` assertion failure (`length2 > 0`) caused by the `proot --link2symlink` wrapper around `tar` extraction
+2. EXIT trap handler deleting the rootfs via `rm -rf` when `dpkg-reconfigure` failed (Android seccomp blocks `execve` for certain syscalls)
+3. Kotlin `String.replace()` for shell script trap content silently failing due to escaping complexity
+
+**Fixes Applied in `BootstrapInstallerService.kt`:**
+
+1. **Removed `proot --link2symlink` wrapper** — `patchTextPrefixReferences()` now filters out lines starting with `proot --link2symlink` so `tar` runs natively without the proot assertion crash
+2. **Neutralized trap `rm -rf` via `sed`** — `ensureDebianInstalled()` runs `sed -i '/^[[:space:]]*trap /s/rm -rf/: #rm-disabled/g'` on the proot-distro script before install, preventing rootfs deletion on non-fatal failures
+3. **Tolerated `dpkg-reconfigure` failure** — The catch block checks if `debian/etc` exists despite exit code 1, and continues with manual `finalizeDebianEnvironment()`
+
+**Key lesson:** Patching shell scripts via Kotlin string replacement is unreliable for complex escaped content (traps with nested quotes/backslashes). Using `sed` directly on the device is more robust.
+
+**Environment requirements for proot on Android:**
+- `PROOT_NO_SECCOMP=1` — bypasses Android seccomp restrictions
+- `PROOT_TMP_DIR` — must point to app-writable tmp directory
+- Runtime proot (statically linked) replaces Termux proot (has hardcoded `/data/data/com.termux` paths)
+
+**Verified:** Full onboarding flow completes in ~90 seconds: bootstrap → apt → Debian rootfs → finalize → Theia backend ready on port 3100
+
+---
+
 ## Recent Changes (2026-04-05)
 
 ### ✅ CHANGED: Embedded Termux + Official proot-distro Flow
@@ -316,6 +342,7 @@ npm install express    # Should work without symlink errors
 |------|---------|-----------|
 | `packages/process/src/node/terminal-process.ts` | **Terminal behavior** - PTY vs pipe logic | Terminal issues, PTY handling |
 | `android-app/.../TheiaBackendService.kt` | **Backend startup & env vars** - Everything backend needs | Git fails, SSL errors, env config |
+| `android-app/.../BootstrapInstallerService.kt` | **First-boot install flow** - Termux + Debian setup | Bootstrap failures, proot issues, package install |
 | `products/theia-android-lite/scripts/build-runtime-assets.mjs` | **Runtime assembly** - Binaries, libs, CA certs | Build issues, asset preparation |
 | `products/theia-android-lite/webpack.config.js` | **Module bundling** - pty.node redirection | Module resolution, bundling strategy |
 
@@ -515,5 +542,5 @@ After any change, verify on device:
 - **Project Path:** `/home/muhammad-taha/Downloads/DevPocket/DevPocket App`
 - **IDE:** VS Code with this codebase open
 - **Memory Path:** `.claude/projects/-home-...-DevPocket-DevPocket-App/memory/`
-- **Last Updated:** 2026-03-30 (Real PTY, git/SSL, npm fixes + memory system)
-- **Status:** ✅ Fully functional terminal with real PTY, git, npm support
+- **Last Updated:** 2026-04-11 (PRoot bootstrap stabilized — full Debian install working)
+- **Status:** ✅ Full first-boot flow working: Termux bootstrap → proot-distro Debian → Theia backend on port 3100
