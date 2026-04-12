@@ -821,7 +821,11 @@ class BootstrapInstallerService(private val context: Context) {
 
         // Step 2: Native Extract
         Log.i(TAG, "Extracting downloaded packages natively")
-        val archivesDir = File(context.cacheDir, "apt/archives")
+        // apt-get stores downloaded .deb files in $PREFIX/var/cache/apt/archives,
+        // not in context.cacheDir. Check both locations so either works.
+        val archivesDirPrimary = File(termuxPrefix, "var/cache/apt/archives")
+        val archivesDirFallback = File(context.cacheDir, "apt/archives")
+        val archivesDir = if (archivesDirPrimary.exists()) archivesDirPrimary else archivesDirFallback
         if (archivesDir.exists()) {
             val debs = archivesDir.listFiles { file -> file.name.endsWith(".deb") }
             if (debs != null) {
@@ -864,14 +868,36 @@ class BootstrapInstallerService(private val context: Context) {
         }
         publishProgress("termux-installing-packages", 90, 100)
 
-        // Step 4: Verify all required binaries exist
+        // Step 4: Verify all required binaries exist; retry with a direct apt-get install
+        // if any are missing (e.g. the download-only step was partial due to a stale cache).
         val expectedBinaries = mapOf(
             "proot" to "proot",
             "proot-distro" to "proot-distro",
             "nodejs" to "node",
             "npm" to "npm"
         )
-        
+
+        val missingAfterExtract = packages.filter { pkg ->
+            val bin = expectedBinaries[pkg] ?: return@filter false
+            !File(termuxBin, bin).exists()
+        }
+        if (missingAfterExtract.isNotEmpty()) {
+            Log.w(TAG, "Missing after native extract: $missingAfterExtract — trying direct apt-get install")
+            try {
+                runTermuxCompatShellCommand(
+                    "apt-get -o Dpkg::Use-Pty=0 -y --allow-unauthenticated install ${missingAfterExtract.joinToString(" ")}",
+                    "termux-fallback-install"
+                )
+            } catch (e: Exception) {
+                Log.w(TAG, "Fallback apt-get install failed (${e.message}); trying dpkg --configure again")
+                try {
+                    runTermuxCompatShellCommand("dpkg --configure -a --force-all", "termux-dpkg-configure-retry")
+                } catch (e2: Exception) {
+                    Log.w(TAG, "dpkg configure retry: ${e2.message}")
+                }
+            }
+        }
+
         for (pkg in packages) {
             val binName = expectedBinaries[pkg]
             if (binName != null) {
