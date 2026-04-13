@@ -822,11 +822,15 @@ class BootstrapInstallerService(private val context: Context) {
 
         // Step 2: Native Extract
         Log.i(TAG, "Extracting downloaded packages natively")
-        // apt-get stores downloaded .deb files in $PREFIX/var/cache/apt/archives,
-        // not in context.cacheDir. Check both locations so either works.
+        // apt-get stores downloaded .deb files in either $PREFIX/var/cache/apt/archives
+        // or context.cacheDir/apt/archives depending on how the proot compat bind-mounts map.
+        // Check which directory actually has .deb files (not just the directory existing,
+        // since the primary path may exist but only contain an empty 'partial/' subdirectory).
         val archivesDirPrimary = File(termuxPrefix, "var/cache/apt/archives")
         val archivesDirFallback = File(context.cacheDir, "apt/archives")
-        val archivesDir = if (archivesDirPrimary.exists()) archivesDirPrimary else archivesDirFallback
+        val primaryHasDebs = archivesDirPrimary.exists() &&
+            archivesDirPrimary.listFiles { f -> f.name.endsWith(".deb") }?.isNotEmpty() == true
+        val archivesDir = if (primaryHasDebs) archivesDirPrimary else archivesDirFallback
         if (archivesDir.exists()) {
             val debs = archivesDir.listFiles { file -> file.name.endsWith(".deb") }
             if (debs != null) {
@@ -945,7 +949,11 @@ class BootstrapInstallerService(private val context: Context) {
                 conn.readTimeout    = 30_000
                 conn.connect()
                 if (conn.responseCode == 200) {
-                    termuxProotDistro.writeBytes(conn.inputStream.readBytes())
+                    var content = conn.inputStream.readBytes().toString(Charsets.UTF_8)
+                    // The GitHub source is a template — replace all @TERMUX_PREFIX@ placeholders
+                    // with the actual Termux prefix path so the shebang and internal paths resolve.
+                    content = content.replace("@TERMUX_PREFIX@", termuxPrefix.absolutePath)
+                    termuxProotDistro.writeText(content, Charsets.UTF_8)
                     termuxProotDistro.setExecutable(true, false)
                     Log.i(TAG, "Downloaded proot-distro (${termuxProotDistro.length()} bytes)")
                 } else {
