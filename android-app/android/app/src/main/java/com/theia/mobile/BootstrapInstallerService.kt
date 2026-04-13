@@ -1088,11 +1088,31 @@ class BootstrapInstallerService(private val context: Context) {
             dpkgPreconf.setExecutable(true, false)
         }
 
-        // Pre-create the _ssh group needed by openssh-client postinst (groupadd
-        // uses link() for lock files — nlink check fails with our shim)
+        // Replace groupadd/useradd/addgroup/adduser with no-ops.
+        // Package postinst scripts try to create system users/groups (e.g. dbus's
+        // "groupadd -g 102 messagebus"). Inside proot, groupadd can't update /etc/group
+        // (returns exit code 10), causing the postinst to abort. A no-op that always
+        // exits 0 prevents this — packages still work correctly without the system account.
+        val noopUserMgmt = "#!/bin/sh\n# DevPocket: disabled — user/group management fails inside proot\nexit 0\n"
+        for (cmd in listOf("groupadd", "groupdel", "groupmod", "useradd", "userdel", "usermod", "addgroup", "adduser", "delgroup", "deluser")) {
+            for (dir in listOf("usr/sbin", "usr/bin", "sbin", "bin")) {
+                val f = File(debianRoot, "$dir/$cmd")
+                if (f.exists() && !f.readText().contains("DevPocket")) {
+                    f.writeText(noopUserMgmt)
+                    f.setExecutable(true, false)
+                }
+            }
+        }
+
+        // Pre-create the _ssh and messagebus groups so any remaining references work.
         val groupFile = File(debianRoot, "etc/group")
-        if (groupFile.exists() && !groupFile.readText().contains("_ssh")) {
-            groupFile.appendText("_ssh:x:101:\n")
+        if (groupFile.exists()) {
+            val groupContent = groupFile.readText()
+            val groupsToAdd = buildString {
+                if (!groupContent.contains("_ssh:")) append("_ssh:x:101:\n")
+                if (!groupContent.contains("messagebus:")) append("messagebus:x:102:\n")
+            }
+            if (groupsToAdd.isNotEmpty()) groupFile.appendText(groupsToAdd)
         }
 
         // Install link() shim — needed so dpkg can create status-old backup
@@ -1148,7 +1168,13 @@ class BootstrapInstallerService(private val context: Context) {
             tolerateFailure = true
         )
 
-        ensureDebianGitAvailable()
+        try {
+            ensureDebianGitAvailable()
+        } catch (e: Exception) {
+            // git install is best-effort — network issues during bootstrap shouldn't abort setup.
+            // The user can install git manually later from the terminal.
+            Log.w(TAG, "git install failed (non-fatal, can be retried from terminal): ${e.message}")
+        }
 
         Log.i(TAG, "Finalized Debian root environment at ${rootHome.absolutePath}")
     }
@@ -1577,7 +1603,7 @@ class BootstrapInstallerService(private val context: Context) {
         phase: String,
         extraEnv: Map<String, String> = emptyMap()
     ) {
-        runTermuxCompatCommand(listOf(File(termuxBin, "bash").absolutePath, "-lc", command), phase, extraEnv)
+        runTermuxCompatCommand(listOf(File(termuxBin, "bash").absolutePath, "-c", command), phase, extraEnv)
     }
 
     private fun runTermuxCompatCommand(
@@ -1597,7 +1623,7 @@ class BootstrapInstallerService(private val context: Context) {
             "TMPDIR" to termuxTmp.absolutePath,
             "PROOT_NO_SECCOMP" to "1"
         )
-        runTermuxCommand(listOf(File(termuxBin, "bash").absolutePath, "-lc", command), phase, mergedEnv)
+        runTermuxCommand(listOf(File(termuxBin, "bash").absolutePath, "-c", command), phase, mergedEnv)
     }
 
     private fun runTermuxCommand(
