@@ -191,6 +191,75 @@ class BootstrapInstallerService(private val context: Context) {
         }
     }
 
+    /**
+     * Scan deployed VS Code extensions for Android-incompatible native binaries
+     * (e.g. Alpine musl ELFs shipped by Claude Code) and replace them with shell
+     * wrappers that execute the real binary inside the Debian proot (which has
+     * the `musl` package installed). The original binary is copied to
+     * /opt/devpocket-native/<plugin>/claude inside Debian before the host copy
+     * is overwritten with the wrapper script. Idempotent — wrappers are detected
+     * by their "DevPocket wrapper" signature and skipped on subsequent scans.
+     */
+    fun wrapAndroidIncompatibleNativeBinaries() {
+        val pluginsRoot = File(context.filesDir, ".theia-android-lite/deployedPlugins")
+        if (!pluginsRoot.isDirectory) return
+
+        val claudeCodeDirs = pluginsRoot.listFiles { f ->
+            f.isDirectory && f.name.startsWith("anthropic.claude-code-")
+        } ?: return
+
+        for (pluginDir in claudeCodeDirs) {
+            val binary = File(pluginDir, "extension/resources/native-binary/claude")
+            if (!binary.exists() || !binary.isFile) continue
+            try {
+                wrapSingleClaudeBinary(binary, pluginDir.name)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to wrap ${binary.absolutePath}: ${e.message}")
+            }
+        }
+    }
+
+    private fun wrapSingleClaudeBinary(binary: File, pluginName: String) {
+        val head = binary.inputStream().use { stream ->
+            val buf = ByteArray(64)
+            val n = stream.read(buf)
+            if (n <= 0) return
+            buf.copyOf(n)
+        }
+        // Already a DevPocket wrapper — skip.
+        if (String(head).contains("DevPocket wrapper")) {
+            return
+        }
+        // Only wrap ELF binaries — don't clobber anything unexpected.
+        if (head.size < 4 ||
+            head[0] != 0x7f.toByte() || head[1] != 'E'.code.toByte() ||
+            head[2] != 'L'.code.toByte() || head[3] != 'F'.code.toByte()
+        ) {
+            return
+        }
+
+        Log.i(TAG, "Wrapping Alpine musl Claude binary for Debian execution: ${binary.absolutePath}")
+
+        val targetDir = File(debianRoot, "opt/devpocket-native/$pluginName")
+        targetDir.mkdirs()
+        val target = File(targetDir, "claude")
+        binary.copyTo(target, overwrite = true)
+        target.setExecutable(true, false)
+        target.setReadable(true, false)
+
+        val guestTarget = "/opt/devpocket-native/$pluginName/claude"
+        val wrapper = buildString {
+            appendLine("#!/system/bin/sh")
+            appendLine("# DevPocket wrapper: Alpine musl binary redirected into Debian proot (musl installed).")
+            appendLine("# Original binary copied to $guestTarget inside Debian.")
+            appendLine("exec \"${termuxShellWrapper.absolutePath}\" \\")
+            appendLine("  -c '$guestTarget \"\$@\"' claude \"\$@\"")
+        }
+        binary.writeText(wrapper)
+        binary.setExecutable(true, false)
+        Log.i(TAG, "Wrapper written at ${binary.absolutePath} (target: $guestTarget)")
+    }
+
     private fun ensureBaseDirectories() {
         linuxBase.mkdirs()
         tempDir.mkdirs()
@@ -1236,16 +1305,28 @@ class BootstrapInstallerService(private val context: Context) {
     private fun hasDebianGitBinary(rootFs: File): Boolean = File(rootFs, DEBIAN_GIT_BINARY_PATH).exists()
 
     private fun ensureDebianGitAvailable() {
-        if (hasDebianGitBinary(debianRoot)) {
-            Log.i(TAG, "Debian git already present at ${File(debianRoot, DEBIAN_GIT_BINARY_PATH).absolutePath}")
+        val needsGit = !hasDebianGitBinary(debianRoot)
+        // musl is required so Alpine-compiled extension binaries (e.g. Claude Code,
+        // which ships as a musl-linked aarch64 ELF) can run inside Debian proot.
+        val needsMusl = !File(debianRoot, "lib/ld-musl-aarch64.so.1").exists()
+
+        if (!needsGit && !needsMusl) {
+            Log.i(TAG, "Debian git and musl already present")
             return
         }
 
-        Log.i(TAG, "Installing Debian git package for IDE terminal support")
+        val pkgsToInstall = buildList {
+            if (needsGit) add(DEBIAN_GIT_PACKAGE)
+            if (needsMusl) add("musl")
+        }
+        Log.i(TAG, "Installing Debian packages: ${pkgsToInstall.joinToString(" ")}")
         runDebianShellWrapperCommand("apt-get update", "debian-apt-update")
-        runDebianShellWrapperCommand("apt-get install -y $DEBIAN_GIT_PACKAGE", "debian-install-git")
+        runDebianShellWrapperCommand(
+            "apt-get install -y ${pkgsToInstall.joinToString(" ")}",
+            "debian-install-${pkgsToInstall.joinToString("-")}"
+        )
 
-        if (!hasDebianGitBinary(debianRoot)) {
+        if (needsGit && !hasDebianGitBinary(debianRoot)) {
             throw IllegalStateException("Debian git installation completed but $DEBIAN_GIT_BINARY_PATH is still missing")
         }
     }

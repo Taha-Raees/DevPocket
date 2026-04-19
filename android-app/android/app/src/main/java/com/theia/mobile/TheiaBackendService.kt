@@ -109,6 +109,11 @@ class TheiaBackendService : Service() {
                 logLine("Backend health check passed on port $selectedPort")
             }
 
+            // Extensions (Claude Code, etc.) download and deploy asynchronously after
+            // the backend becomes healthy. Poll for Android-incompatible native binaries
+            // and wrap them before the user activates the extension.
+            startNativeBinaryWrapperWatcher()
+
             val exit = backendProcess!!.waitFor()
             outThread.join(2_000L)
             errThread.join(2_000L)
@@ -127,6 +132,31 @@ class TheiaBackendService : Service() {
             if (!stopping.get()) {
                 updateNotification("Backend stopped")
             }
+        }
+    }
+
+    private fun startNativeBinaryWrapperWatcher() {
+        Thread({
+            val installer = BootstrapInstallerService(this)
+            val deadline = System.currentTimeMillis() + 10 * 60_000L
+            // Run an immediate scan, then poll every 5s for 10 minutes. Wrapping is
+            // idempotent (wrapped files are detected by their shebang signature), so
+            // repeat scans are cheap.
+            while (!stopping.get() && System.currentTimeMillis() < deadline) {
+                try {
+                    installer.wrapAndroidIncompatibleNativeBinaries()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Native binary wrapper scan failed: ${e.message}")
+                }
+                try {
+                    Thread.sleep(5_000L)
+                } catch (_: InterruptedException) {
+                    return@Thread
+                }
+            }
+        }, "theia-native-binary-wrapper").apply {
+            isDaemon = true
+            start()
         }
     }
 
